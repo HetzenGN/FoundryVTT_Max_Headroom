@@ -1,0 +1,1205 @@
+/* styles/foundryvtt-max-headroom.css */
+
+/* #region Portrait Bar Root */
+
+.max-headroom-portrait-bar {
+  --max-headroom-tile-size: 160px;
+  --max-headroom-bar-gap: 10px;
+  --max-headroom-speaking-scale: 1.06;
+  --max-headroom-transition-speed: 140ms;
+
+  position: fixed;
+  z-index: 70;
+
+  width: auto;
+  height: auto;
+
+  margin: 0;
+  padding: 0;
+
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+
+  overflow: visible;
+
+  /*
+   * The portrait overlay itself should not block interaction with
+   * the Foundry canvas or UI beneath it.
+   */
+  pointer-events: none;
+}
+
+.max-headroom-portrait-bar[hidden] {
+  display: none !important;
+}
+
+.max-headroom-portrait-bar.is-empty {
+  display: none;
+}
+
+/* #endregion */
+
+
+/* #region Bar Anchoring */
+
+/*
+ * Bottom
+ */
+.max-headroom-portrait-bar[data-anchor="bottom"] {
+  left: 50%;
+  bottom: 12px;
+
+  transform: translateX(-50%);
+}
+
+/*
+ * Top
+ */
+.max-headroom-portrait-bar[data-anchor="top"] {
+  left: 50%;
+  top: 12px;
+
+  transform: translateX(-50%);
+}
+
+/*
+ * Left
+ */
+.max-headroom-portrait-bar[data-anchor="left"] {
+  left: 12px;
+  top: 50%;
+
+  transform: translateY(-50%);
+}
+
+/*
+ * Right
+ */
+.max-headroom-portrait-bar[data-anchor="right"] {
+  right: 12px;
+  top: 50%;
+
+  transform: translateY(-50%);
+}
+
+/* #endregion */
+
+
+/* #region Bar Layout */
+
+.max-headroom-portrait-bar__inner {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+
+  gap: var(--max-headroom-bar-gap);
+
+  width: max-content;
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 40px);
+
+  margin: 0;
+  padding: 0;
+
+  overflow: visible;
+}
+
+/*
+ * Horizontal portrait arrangement.
+ */
+.max-headroom-portrait-bar[data-orientation="horizontal"]
+  .max-headroom-portrait-bar__inner {
+  flex-direction: row;
+  flex-wrap: nowrap;
+}
+
+/*
+ * Vertical portrait arrangement.
+ */
+.max-headroom-portrait-bar[data-orientation="vertical"]
+  .max-headroom-portrait-bar__inner {
+  flex-direction: column;
+  align-items: center;
+}
+
+/* #endregion */
+
+
+/* #region Portrait Tile */
+
+.max-headroom-portrait-tile {
+  position: relative;
+
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+
+  width: var(--max-headroom-tile-size);
+  max-width: var(--max-headroom-tile-size);
+
+  margin: 0;
+  padding: 0;
+
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+
+  overflow: visible;
+
+  transform: scale(1);
+
+  transform-origin: bottom center;
+
+  transition:
+    transform var(--max-headroom-transition-speed) ease,
+    filter var(--max-headroom-transition-speed) ease,
+    opacity var(--max-headroom-transition-speed) ease;
+}
+
+/*
+ * For left/right bars, scaling from the center is visually more natural.
+ */
+.max-headroom-portrait-bar[data-anchor="left"]
+  .max-headroom-portrait-tile,
+.max-headroom-portrait-bar[data-anchor="right"]
+  .max-headroom-portrait-tile {
+  transform-origin: center;
+}
+
+/* #endregion */
+
+
+/* #region Portrait Image Wrapper */
+
+.max-headroom-portrait-tile__image-wrapper {
+  position: relative;
+
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+
+  width: var(--max-headroom-tile-size);
+  height: var(--max-headroom-tile-size);
+
+  margin: 0;
+  padding: 0;
+
+  background: transparent;
+  border: 0;
+
+  overflow: visible;
+}
+
+/* #endregion */
+
+
+/* #region Portrait Image */
+
+.max-headroom-portrait-tile__image {
+  display: block;
+
+  width: 100%;
+  height: 100%;
+
+  max-width: var(--max-headroom-tile-size);
+  max-height: var(--max-headroom-tile-size);
+
+  margin: 0;
+  padding: 0;
+
+  object-fit: contain;
+  object-position: center bottom;
+
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+
+  /*
+   * Prevent Foundry or browser defaults from making the image behave
+   * like an interactive draggable asset.
+   */
+  user-select: none;
+  pointer-events: none;
+
+  transition:
+    opacity var(--max-headroom-transition-speed) ease,
+    filter var(--max-headroom-transition-speed) ease;
+}
+
+.max-headroom-portrait-tile__image[hidden] {
+  display: none;
+}
+
+/* #endregion */
+
+
+/* #region Missing Image Placeholder */
+
+.max-headroom-portrait-tile__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  height: 100%;
+
+  padding: 8px;
+
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+
+  background: rgba(0, 0, 0, 0.35);
+
+  color: rgba(255, 255, 255, 0.7);
+
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: center;
+
+  box-sizing: border-box;
+}
+
+.max-headroom-portrait-tile__placeholder[hidden] {
+  display: none;
+}
+
+/* #endregion */
+
+
+/* #region Portrait Name */
+
+.max-headroom-portrait-tile__name {
+  max-width: 100%;
+
+  margin-top: 4px;
+  padding: 2px 6px;
+
+  overflow: hidden;
+
+  border-radius: 4px;
+
+  background: rgba(0, 0, 0, 0.55);
+
+  color: #ffffff;
+
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  text-shadow: 0 1px 2px #000000;
+
+  box-sizing: border-box;
+}
+
+/* #endregion */
+
+
+/* #region Speaking State */
+
+/*
+ * Speaking state exists even when animation is disabled.
+ *
+ * The image swap itself is performed by portrait-bar.js.
+ */
+.max-headroom-portrait-tile.is-speaking {
+  z-index: 2;
+}
+
+/*
+ * Additional visual treatment only occurs when the world setting enables
+ * speaking animation.
+ */
+.max-headroom-portrait-bar.animations-enabled
+  .max-headroom-portrait-tile.is-speaking {
+  transform: scale(
+    var(--max-headroom-speaking-scale)
+  );
+
+  filter:
+    drop-shadow(
+      0 0 5px rgba(255, 255, 255, 0.7)
+    )
+    drop-shadow(
+      0 0 10px rgba(255, 255, 255, 0.35)
+    );
+
+  animation:
+    max-headroom-speaking-pulse
+    900ms
+    ease-in-out
+    infinite;
+}
+
+@keyframes max-headroom-speaking-pulse {
+  0%,
+  100% {
+    filter:
+      drop-shadow(
+        0 0 4px rgba(255, 255, 255, 0.55)
+      )
+      drop-shadow(
+        0 0 8px rgba(255, 255, 255, 0.25)
+      );
+  }
+
+  50% {
+    filter:
+      drop-shadow(
+        0 0 7px rgba(255, 255, 255, 0.8)
+      )
+      drop-shadow(
+        0 0 14px rgba(255, 255, 255, 0.4)
+      );
+  }
+}
+
+/* #endregion */
+
+
+/* #region Muted and Deafened States */
+
+/*
+ * If a mutedImage is configured, portrait-bar.js will swap to it.
+ *
+ * This CSS remains useful when no dedicated muted artwork is supplied.
+ */
+.max-headroom-portrait-tile.is-muted
+  .max-headroom-portrait-tile__image {
+  opacity: 0.7;
+}
+
+/*
+ * Deafening is currently represented as a subtle presentation treatment.
+ * It remains independent of speaking state.
+ */
+.max-headroom-portrait-tile.is-deafened
+  .max-headroom-portrait-tile__image {
+  filter: saturate(0.6);
+}
+
+/*
+ * Avoid making muted/deafened treatment overpower the active-speaker
+ * indicator when multiple states are present simultaneously.
+ */
+.max-headroom-portrait-bar.animations-enabled
+  .max-headroom-portrait-tile.is-speaking.is-deafened {
+  filter:
+    drop-shadow(
+      0 0 5px rgba(255, 255, 255, 0.7)
+    );
+}
+
+/* #endregion */
+
+
+/* #region Responsive Layout */
+
+/*
+ * Allow a large horizontal group to remain on-screen rather than extending
+ * indefinitely beyond the viewport.
+ */
+@media (max-width: 1000px) {
+  .max-headroom-portrait-bar[data-orientation="horizontal"]
+    .max-headroom-portrait-bar__inner {
+    max-width: calc(100vw - 24px);
+
+    gap: 6px;
+  }
+}
+
+/*
+ * Very narrow clients can shrink the rendered tiles while retaining the
+ * configured tile size as the normal maximum.
+ */
+@media (max-width: 700px) {
+  .max-headroom-portrait-bar {
+    --max-headroom-responsive-tile-size:
+      min(
+        var(--max-headroom-tile-size),
+        120px
+      );
+  }
+
+  .max-headroom-portrait-tile,
+  .max-headroom-portrait-tile__image-wrapper {
+    width:
+      var(
+        --max-headroom-responsive-tile-size
+      );
+
+    max-width:
+      var(
+        --max-headroom-responsive-tile-size
+      );
+  }
+
+  .max-headroom-portrait-tile__image-wrapper {
+    height:
+      var(
+        --max-headroom-responsive-tile-size
+      );
+  }
+
+  .max-headroom-portrait-tile__image {
+    max-width:
+      var(
+        --max-headroom-responsive-tile-size
+      );
+
+    max-height:
+      var(
+        --max-headroom-responsive-tile-size
+      );
+  }
+}
+
+/* #endregion */
+
+
+/* #region Reduced Motion */
+
+/*
+ * Respect clients which request reduced motion even when the Foundry world
+ * has speaking animation enabled.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .max-headroom-portrait-bar.animations-enabled
+    .max-headroom-portrait-tile.is-speaking {
+    animation: none;
+  }
+
+  .max-headroom-portrait-tile,
+  .max-headroom-portrait-tile__image {
+    transition: none;
+  }
+}
+
+/* #endregion */
+
+/* #region GM Reactive Portrait Configuration */
+
+.max-headroom-user-config {
+  min-width: 640px;
+}
+
+.max-headroom-user-config .window-content {
+  padding: 0;
+}
+
+.max-headroom-user-config__content {
+  display: flex;
+  flex-direction: column;
+
+  height: 100%;
+  min-height: 0;
+}
+
+.max-headroom-user-config__intro {
+  flex: 0 0 auto;
+
+  padding: 12px 16px;
+
+  border-bottom:
+    1px solid
+    var(--color-border-light-primary);
+}
+
+.max-headroom-user-config__intro p {
+  margin:
+    0
+    0
+    4px;
+}
+
+.max-headroom-user-config__intro p:last-child {
+  margin-bottom: 0;
+}
+
+
+/* #region User List */
+
+.max-headroom-user-config__users {
+  flex: 1 1 auto;
+
+  min-height: 0;
+
+  padding: 12px;
+
+  overflow-y: auto;
+}
+
+.max-headroom-user-config__user {
+  margin:
+    0
+    0
+    14px;
+
+  padding: 12px;
+
+  border:
+    1px solid
+    var(--color-border-light-primary);
+
+  border-radius: 6px;
+}
+
+.max-headroom-user-config__user:last-child {
+  margin-bottom: 0;
+}
+
+.max-headroom-user-config__user legend {
+  padding:
+    0
+    6px;
+
+  font-size: 1.05em;
+  font-weight: 700;
+}
+
+/* #endregion */
+
+
+/* #region User Mapping */
+
+.max-headroom-user-config__mapping {
+  display: grid;
+
+  grid-template-columns:
+    auto
+    minmax(240px, 1fr)
+    100px;
+
+  align-items: end;
+
+  gap: 12px;
+
+  margin-bottom: 12px;
+}
+
+.max-headroom-user-config__mapping label {
+  display: flex;
+  flex-direction: column;
+
+  gap: 4px;
+}
+
+.max-headroom-user-config__mapping
+  .max-headroom-user-config__enabled {
+  flex-direction: row;
+
+  align-items: center;
+
+  padding-bottom: 5px;
+}
+
+.max-headroom-user-config__enabled input {
+  width: auto;
+  margin: 0;
+}
+
+.max-headroom-user-config__sort input {
+  text-align: center;
+}
+
+/* #endregion */
+
+
+/* #region Image Configuration */
+
+.max-headroom-user-config__images {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      3,
+      minmax(0, 1fr)
+    );
+
+  gap: 12px;
+}
+
+.max-headroom-user-config__image-field {
+  display: flex;
+  flex-direction: column;
+
+  min-width: 0;
+
+  gap: 5px;
+}
+
+.max-headroom-user-config__image-field > label {
+  font-weight: 600;
+}
+
+.max-headroom-user-config__file-input {
+  display: flex;
+
+  gap: 4px;
+}
+
+.max-headroom-user-config__file-input input {
+  flex: 1 1 auto;
+
+  min-width: 0;
+}
+
+.max-headroom-user-config__file-input button {
+  flex: 0 0 auto;
+
+  width: 34px;
+  margin: 0;
+}
+
+.max-headroom-user-config__preview {
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  height: 120px;
+
+  padding: 4px;
+
+  overflow: hidden;
+
+  border:
+    1px solid
+    var(--color-border-light-primary);
+
+  border-radius: 4px;
+
+  background:
+    rgba(
+      0,
+      0,
+      0,
+      0.15
+    );
+}
+
+.max-headroom-user-config__preview img {
+  display: block;
+
+  width: 100%;
+  height: 100%;
+
+  border: 0;
+
+  object-fit: contain;
+
+  background: transparent;
+}
+
+.max-headroom-user-config__preview.is-empty {
+  opacity: 0.65;
+
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* #endregion */
+
+
+/* #region Configuration Footer */
+
+.max-headroom-user-config__footer {
+  display: flex;
+
+  flex: 0 0 auto;
+
+  justify-content: flex-end;
+
+  padding: 10px 12px;
+
+  border-top:
+    1px solid
+    var(--color-border-light-primary);
+}
+
+.max-headroom-user-config__save {
+  width: auto;
+
+  min-width: 180px;
+
+  margin: 0;
+}
+
+/* #endregion */
+
+
+/* #region Configuration Responsive */
+
+@media (max-width: 800px) {
+  .max-headroom-user-config__mapping {
+    grid-template-columns:
+      1fr
+      100px;
+  }
+
+  .max-headroom-user-config__enabled {
+    grid-column:
+      1
+      /
+      -1;
+  }
+
+  .max-headroom-user-config__images {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* #endregion */
+
+/* #region GM Relay Controller */
+
+.max-headroom-relay-controller {
+  min-width: 460px;
+}
+
+.max-headroom-relay-controller .window-content {
+  padding: 0;
+}
+
+
+/* #region Controller Layout */
+
+.max-headroom-relay-controller__content {
+  display: flex;
+  flex-direction: column;
+
+  height: 100%;
+  min-height: 0;
+
+  overflow-y: auto;
+}
+
+.max-headroom-relay-controller__section {
+  padding: 12px 14px;
+
+  border-bottom:
+    1px solid
+    var(--color-border-light-primary);
+}
+
+.max-headroom-relay-controller__section:last-child {
+  border-bottom: 0;
+}
+
+.max-headroom-relay-controller__section-header {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 8px;
+
+  margin-bottom: 10px;
+}
+
+.max-headroom-relay-controller__section-header h2,
+.max-headroom-relay-controller__section-header h3 {
+  display: flex;
+
+  align-items: center;
+
+  gap: 6px;
+
+  margin: 0;
+}
+
+/* #endregion */
+
+
+/* #region Status Grid */
+
+.max-headroom-relay-controller__status-grid {
+  display: grid;
+
+  grid-template-columns:
+    minmax(130px, auto)
+    minmax(0, 1fr);
+
+  gap:
+    5px
+    12px;
+
+  align-items: center;
+}
+
+.max-headroom-relay-controller__status-label {
+  opacity: 0.75;
+
+  font-size: 0.9em;
+  font-weight: 600;
+}
+
+.max-headroom-relay-controller__status-value {
+  min-width: 0;
+
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  text-transform: capitalize;
+}
+
+.max-headroom-relay-controller__monospace {
+  font-family:
+    monospace;
+
+  font-size: 0.9em;
+
+  text-transform: none;
+}
+
+/* #endregion */
+
+
+/* #region Relay Status Colors */
+
+.max-headroom-relay-controller__status-value[data-relay-status="connected"] {
+  color: #6fd47f;
+  font-weight: 700;
+}
+
+.max-headroom-relay-controller__status-value[data-relay-status="connecting"] {
+  color: #e3c45b;
+  font-weight: 700;
+}
+
+.max-headroom-relay-controller__status-value[data-relay-status="stale"] {
+  color: #e3a95b;
+  font-weight: 700;
+}
+
+.max-headroom-relay-controller__status-value[data-relay-status="disconnected"] {
+  opacity: 0.75;
+}
+
+.max-headroom-relay-controller__status-value[data-relay-status="incompatible"],
+.max-headroom-relay-controller__status-value[data-relay-status="error"] {
+  color: #e66b6b;
+  font-weight: 700;
+}
+
+/* #endregion */
+
+
+/* #region Relay Host */
+
+.max-headroom-relay-controller__host {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  margin-bottom: 10px;
+}
+
+.max-headroom-relay-controller__host > div:first-child {
+  display: flex;
+  flex-direction: column;
+
+  gap: 2px;
+}
+
+.max-headroom-relay-controller__host-state {
+  display: flex;
+
+  align-items: center;
+
+  gap: 5px;
+
+  font-size: 0.9em;
+}
+
+.max-headroom-relay-controller__actions {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 6px;
+}
+
+.max-headroom-relay-controller__actions button {
+  width: auto;
+
+  flex: 0 0 auto;
+
+  margin: 0;
+}
+
+/* #endregion */
+
+
+/* #region Controller Buttons */
+
+.max-headroom-relay-controller__icon-button,
+.max-headroom-relay-controller__small-button {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  width: auto;
+
+  margin: 0;
+}
+
+.max-headroom-relay-controller__icon-button {
+  min-width: 32px;
+
+  padding:
+    4px
+    8px;
+}
+
+.max-headroom-relay-controller__small-button {
+  gap: 5px;
+
+  padding:
+    4px
+    8px;
+
+  font-size: 0.9em;
+}
+
+/* #endregion */
+
+
+/* #region Speaker and User Lists */
+
+.max-headroom-relay-controller__count {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  min-width: 20px;
+  height: 20px;
+
+  padding:
+    0
+    5px;
+
+  border-radius: 10px;
+
+  background:
+    rgba(
+      0,
+      0,
+      0,
+      0.3
+    );
+
+  font-size: 0.75em;
+}
+
+.max-headroom-relay-controller__list {
+  display: flex;
+  flex-direction: column;
+
+  gap: 4px;
+}
+
+.max-headroom-relay-controller__list-row {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  padding:
+    6px
+    8px;
+
+  border-radius: 4px;
+
+  background:
+    rgba(
+      0,
+      0,
+      0,
+      0.12
+    );
+}
+
+.max-headroom-relay-controller__list-main {
+  display: flex;
+  flex-direction: column;
+
+  min-width: 0;
+
+  gap: 1px;
+}
+
+.max-headroom-relay-controller__list-main strong {
+  overflow: hidden;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.max-headroom-relay-controller__subtext {
+  opacity: 0.65;
+
+  overflow: hidden;
+
+  font-family: monospace;
+  font-size: 0.8em;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.max-headroom-relay-controller__list-state {
+  display: flex;
+
+  flex: 0 0 auto;
+
+  align-items: center;
+
+  gap: 7px;
+}
+
+.max-headroom-relay-controller__age {
+  opacity: 0.65;
+
+  font-size: 0.8em;
+
+  white-space: nowrap;
+}
+
+.max-headroom-relay-controller__empty {
+  padding:
+    8px
+    10px;
+
+  opacity: 0.6;
+
+  font-size: 0.9em;
+  font-style: italic;
+}
+
+/* #endregion */
+
+
+/* #region Notices and Errors */
+
+.max-headroom-relay-controller__notice,
+.max-headroom-relay-controller__error,
+.max-headroom-relay-controller__diagnostic-warning {
+  margin-top: 8px;
+
+  padding:
+    7px
+    9px;
+
+  border-radius: 4px;
+
+  font-size: 0.9em;
+}
+
+.max-headroom-relay-controller__notice {
+  background:
+    rgba(
+      100,
+      100,
+      100,
+      0.18
+    );
+}
+
+.max-headroom-relay-controller__error {
+  background:
+    rgba(
+      160,
+      40,
+      40,
+      0.2
+    );
+
+  border:
+    1px solid
+    rgba(
+      220,
+      80,
+      80,
+      0.4
+    );
+}
+
+.max-headroom-relay-controller__diagnostic-warning {
+  background:
+    rgba(
+      180,
+      130,
+      40,
+      0.15
+    );
+
+  border:
+    1px solid
+    rgba(
+      210,
+      160,
+      60,
+      0.35
+    );
+}
+
+.max-headroom-relay-controller__diagnostic-warning strong {
+  display: block;
+
+  margin-bottom: 4px;
+}
+
+/* #endregion */
+
+
+/* #region Controller Responsive */
+
+@media (max-width: 650px) {
+  .max-headroom-relay-controller {
+    min-width: 0;
+  }
+
+  .max-headroom-relay-controller__status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .max-headroom-relay-controller__status-label {
+    margin-top: 5px;
+  }
+
+  .max-headroom-relay-controller__host {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .max-headroom-relay-controller__list-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .max-headroom-relay-controller__list-state {
+    width: 100%;
+  }
+}
+
+/* #endregion */
+
+/* #endregion */
+
+/* #endregion */

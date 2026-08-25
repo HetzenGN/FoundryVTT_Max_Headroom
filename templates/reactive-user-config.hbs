@@ -1,0 +1,265 @@
+{{!-- templates/reactive-user-config.hbs --}}
+
+<div class="max-headroom-user-config__content">
+
+  {{!-- #region Introduction --}}
+
+  <header class="max-headroom-user-config__intro">
+    <p>
+      Configure the Discord mapping and reactive portrait artwork
+      for each Foundry User.
+    </p>
+
+    <p class="notes">
+      These images are independent from Actor portraits, Tokens,
+      character assignments, and Foundry User avatars.
+    </p>
+  </header>
+
+  {{!-- #endregion --}}
+
+
+  {{!-- #region User Configuration --}}
+
+  <section class="max-headroom-user-config__users">
+
+    {{#each users}}
+
+      <fieldset
+        class="max-headroom-user-config__user"
+        data-role="user-config-row"
+        data-user-id="{{userId}}"
+      >
+
+        <legend>
+          {{name}}
+        </legend>
+
+
+        {{!-- #region User Mapping --}}
+
+        <div class="max-headroom-user-config__mapping">
+
+          <label class="max-headroom-user-config__enabled">
+            <input
+              type="checkbox"
+              data-field="enabled"
+              {{#if config.enabled}}checked{{/if}}
+            >
+
+            <span>Enabled</span>
+          </label>
+
+
+          <label>
+            <span>Discord User ID</span>
+
+            <input
+              type="text"
+              data-field="discordUserId"
+              value="{{config.discordUserId}}"
+              placeholder="123456789012345678"
+              autocomplete="off"
+            >
+          </label>
+
+
+          <label class="max-headroom-user-config__sort">
+            <span>Sort Order</span>
+
+            <input
+              type="number"
+              data-field="sortOrder"
+              value="{{config.sortOrder}}"
+              step="1"
+            >
+          </label>
+
+        </div>
+
+        {{!-- #endregion --}}
+
+
+        {{!-- #region Reactive Images --}}
+
+        <div class="max-headroom-user-config__images">
+
+          {{!-- Idle Image --}}
+
+          <div class="max-headroom-user-config__image-field">
+
+            <label>
+              Idle Image
+            </label>
+
+            <div class="max-headroom-user-config__file-input">
+
+              <input
+                type="text"
+                name="idleImage-{{userId}}"
+                data-field="idleImage"
+                value="{{config.idleImage}}"
+                placeholder="Path to idle image"
+              >
+
+              <button
+                type="button"
+                data-action="browseImage"
+                data-type="image"
+                data-target="idleImage-{{userId}}"
+                data-user-id="{{userId}}"
+                data-field="idleImage"
+                title="Browse for idle image"
+              >
+                <i class="fa-solid fa-folder-open"></i>
+              </button>
+
+            </div>
+
+            <div
+              class="max-headroom-user-config__preview {{#unless config.idleImage}}is-empty{{/unless}}"
+              data-preview-field="idleImage"
+            >
+              {{#if config.idleImage}}
+                <img
+                  src="{{config.idleImage}}"
+                  alt=""
+                  draggable="false"
+                >
+              {{else}}
+                <span>No image selected</span>
+              {{/if}}
+            </div>
+
+          </div>
+
+
+          {{!-- Talking Image --}}
+
+          <div class="max-headroom-user-config__image-field">
+
+            <label>
+              Talking Image
+            </label>
+
+            <div class="max-headroom-user-config__file-input">
+
+              <input
+                type="text"
+                name="talkingImage-{{userId}}"
+                data-field="talkingImage"
+                value="{{config.talkingImage}}"
+                placeholder="Path to talking image"
+              >
+
+              <button
+                type="button"
+                data-action="browseImage"
+                data-type="image"
+                data-target="talkingImage-{{userId}}"
+                data-user-id="{{userId}}"
+                data-field="talkingImage"
+                title="Browse for talking image"
+              >
+                <i class="fa-solid fa-folder-open"></i>
+              </button>
+
+            </div>
+
+            <div
+              class="max-headroom-user-config__preview {{#unless config.talkingImage}}is-empty{{/unless}}"
+              data-preview-field="talkingImage"
+            >
+              {{#if config.talkingImage}}
+                <img
+                  src="{{config.talkingImage}}"
+                  alt=""
+                  draggable="false"
+                >
+              {{else}}
+                <span>Falls back to idle</span>
+              {{/if}}
+            </div>
+
+          </div>
+
+
+          {{!-- Muted Image --}}
+
+          <div class="max-headroom-user-config__image-field">
+
+            <label>
+              Muted Image
+            </label>
+
+            <div class="max-headroom-user-config__file-input">
+
+              <input
+                type="text"
+                name="mutedImage-{{userId}}"
+                data-field="mutedImage"
+                value="{{config.mutedImage}}"
+                placeholder="Optional muted image"
+              >
+
+              <button
+                type="button"
+                data-action="browseImage"
+                data-type="image"
+                data-target="mutedImage-{{userId}}"
+                data-user-id="{{userId}}"
+                data-field="mutedImage"
+                title="Browse for muted image"
+              >
+                <i class="fa-solid fa-folder-open"></i>
+              </button>
+
+            </div>
+
+            <div
+              class="max-headroom-user-config__preview {{#unless config.mutedImage}}is-empty{{/unless}}"
+              data-preview-field="mutedImage"
+            >
+              {{#if config.mutedImage}}
+                <img
+                  src="{{config.mutedImage}}"
+                  alt=""
+                  draggable="false"
+                >
+              {{else}}
+                <span>Optional</span>
+              {{/if}}
+            </div>
+
+          </div>
+
+        </div>
+
+        {{!-- #endregion --}}
+
+      </fieldset>
+
+    {{/each}}
+
+  </section>
+
+  {{!-- #endregion --}}
+
+
+  {{!-- #region Footer --}}
+
+  <footer class="max-headroom-user-config__footer">
+
+    <button
+      type="submit"
+      class="max-headroom-user-config__save"
+    >
+      <i class="fa-solid fa-floppy-disk"></i>
+      Save Configuration
+    </button>
+
+  </footer>
+
+  {{!-- #endregion --}}
+
+</div>

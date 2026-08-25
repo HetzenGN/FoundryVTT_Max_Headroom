@@ -1,0 +1,422 @@
+{{!-- templates/relay-controller.hbs --}}
+
+<div class="max-headroom-relay-controller__content">
+
+  {{!-- #region Relay Status --}}
+
+  <section class="max-headroom-relay-controller__section">
+
+    <header class="max-headroom-relay-controller__section-header">
+      <h2>
+        <i class="fa-brands fa-discord"></i>
+        Discord Relay
+      </h2>
+
+      <button
+        type="button"
+        class="max-headroom-relay-controller__icon-button"
+        data-action="refresh"
+        title="Refresh relay status"
+      >
+        <i class="fa-solid fa-rotate"></i>
+      </button>
+    </header>
+
+    <div class="max-headroom-relay-controller__status-grid">
+
+      <div class="max-headroom-relay-controller__status-label">
+        Relay Status
+      </div>
+
+      <div
+        class="max-headroom-relay-controller__status-value"
+        data-relay-status="{{relayStatus}}"
+      >
+        {{relayStatus}}
+      </div>
+
+
+      <div class="max-headroom-relay-controller__status-label">
+        Protocol
+      </div>
+
+      <div class="max-headroom-relay-controller__status-value">
+        {{protocolVersion}}
+      </div>
+
+
+      <div class="max-headroom-relay-controller__status-label">
+        Relay Script
+      </div>
+
+      <div class="max-headroom-relay-controller__status-value">
+        {{relayScriptVersion}}
+      </div>
+
+
+      <div
+        class="max-headroom-relay-controller__status-value"
+        data-role="relative-time"
+        data-timestamp="{{heartbeatTimestamp}}"
+      >
+        {{heartbeatAge}}
+      </div>
+
+      <div class="max-headroom-relay-controller__status-value">
+        {{heartbeatAge}}
+      </div>
+
+
+      <div
+        class="max-headroom-relay-controller__status-value"
+        data-role="relative-time"
+        data-timestamp="{{discordEventTimestamp}}"
+      >
+        {{discordEventAge}}
+      </div>
+
+      <div class="max-headroom-relay-controller__status-value">
+        {{discordEventAge}}
+      </div>
+
+
+      <div class="max-headroom-relay-controller__status-label">
+        Relay Window
+      </div>
+
+      <div class="max-headroom-relay-controller__status-value">
+        {{#if popupOpen}}
+          Open
+        {{else}}
+          Closed
+        {{/if}}
+      </div>
+
+    </div>
+
+    {{#if lastError}}
+      <div class="max-headroom-relay-controller__error">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        {{lastError}}
+      </div>
+    {{/if}}
+
+  </section>
+
+  {{!-- #endregion --}}
+
+
+  {{!-- #region Relay Host --}}
+
+  <section class="max-headroom-relay-controller__section">
+
+    <header class="max-headroom-relay-controller__section-header">
+      <h3>Relay Host</h3>
+    </header>
+
+    <div class="max-headroom-relay-controller__host">
+
+      <div>
+        <span class="max-headroom-relay-controller__status-label">
+          Active Relay Host
+        </span>
+
+        <strong>
+          {{hostUserName}}
+        </strong>
+      </div>
+
+      {{#if hasHost}}
+        <div class="max-headroom-relay-controller__host-state">
+          {{#if hostIsActive}}
+            <i class="fa-solid fa-circle-check"></i>
+            Connected
+          {{else}}
+            <i class="fa-solid fa-circle-xmark"></i>
+            Offline
+          {{/if}}
+        </div>
+      {{/if}}
+
+    </div>
+
+
+    <div class="max-headroom-relay-controller__actions">
+
+      {{#if canClaim}}
+
+        <button
+          type="button"
+          data-action="claimHost"
+        >
+          <i class="fa-solid fa-crown"></i>
+          Claim Relay Host
+        </button>
+
+      {{/if}}
+
+
+      {{#if isLocalHost}}
+
+        <button
+          type="button"
+          data-action="openRelay"
+        >
+          <i class="fa-solid fa-up-right-from-square"></i>
+
+          {{#if popupOpen}}
+            Reopen StreamKit
+          {{else}}
+            Open StreamKit
+          {{/if}}
+        </button>
+
+        <button
+          type="button"
+          data-action="releaseHost"
+        >
+          <i class="fa-solid fa-right-from-bracket"></i>
+          Release Relay Host
+        </button>
+
+      {{/if}}
+
+
+      {{#if hostIsOtherGM}}
+
+        <div class="max-headroom-relay-controller__notice">
+          <i class="fa-solid fa-lock"></i>
+          Another connected GM currently owns the relay.
+        </div>
+
+      {{/if}}
+
+    </div>
+
+  </section>
+
+  {{!-- #endregion --}}
+
+
+  {{!-- #region Speaking Users --}}
+
+  <section class="max-headroom-relay-controller__section">
+
+    <header class="max-headroom-relay-controller__section-header">
+
+      <h3>
+        Speaking
+        <span class="max-headroom-relay-controller__count">
+          {{activeSpeakerCount}}
+        </span>
+      </h3>
+
+      {{#if isLocalHost}}
+        <button
+          type="button"
+          class="max-headroom-relay-controller__small-button"
+          data-action="resetSpeaking"
+          title="Reset all speaking states"
+        >
+          <i class="fa-solid fa-stop"></i>
+          Reset
+        </button>
+      {{/if}}
+
+    </header>
+
+
+    {{#if hasActiveSpeakers}}
+
+      <div class="max-headroom-relay-controller__list">
+
+        {{#each activeSpeakers}}
+
+          <div class="max-headroom-relay-controller__list-row">
+
+            <div class="max-headroom-relay-controller__list-main">
+
+              <strong>
+                {{displayName}}
+              </strong>
+
+              <span class="max-headroom-relay-controller__subtext">
+                {{discordUserId}}
+              </span>
+
+            </div>
+
+            <div class="max-headroom-relay-controller__list-state">
+
+              {{#if muted}}
+                <span title="Muted">
+                  <i class="fa-solid fa-microphone-slash"></i>
+                </span>
+              {{/if}}
+
+              {{#if deafened}}
+                <span title="Deafened">
+                  <i class="fa-solid fa-headphones-simple"></i>
+                </span>
+              {{/if}}
+
+              <span class="max-headroom-relay-controller__age">
+                {{updated}}
+              </span>
+
+            </div>
+
+          </div>
+
+        {{/each}}
+
+      </div>
+
+    {{else}}
+
+      <div class="max-headroom-relay-controller__empty">
+        No users are currently speaking.
+      </div>
+
+    {{/if}}
+
+  </section>
+
+  {{!-- #endregion --}}
+
+
+  {{!-- #region Unmapped Discord Users --}}
+
+  <section class="max-headroom-relay-controller__section">
+
+    <header class="max-headroom-relay-controller__section-header">
+      <h3>
+        Unmapped Discord Users
+
+        <span class="max-headroom-relay-controller__count">
+          {{unmappedUserCount}}
+        </span>
+      </h3>
+    </header>
+
+
+    {{#if hasUnmappedUsers}}
+
+      <div class="max-headroom-relay-controller__list">
+
+        {{#each unmappedUsers}}
+
+          <div class="max-headroom-relay-controller__list-row">
+
+            <div class="max-headroom-relay-controller__list-main">
+
+              <strong>
+                {{displayName}}
+              </strong>
+
+              <span class="max-headroom-relay-controller__subtext">
+                {{discordUserId}}
+              </span>
+
+            </div>
+
+            <div class="max-headroom-relay-controller__age">
+              {{lastSeen}}
+            </div>
+
+          </div>
+
+        {{/each}}
+
+      </div>
+
+    {{else}}
+
+      <div class="max-headroom-relay-controller__empty">
+        No unmapped Discord users detected.
+      </div>
+
+    {{/if}}
+
+  </section>
+
+  {{!-- #endregion --}}
+
+
+  {{!-- #region Diagnostics --}}
+
+  <section class="max-headroom-relay-controller__section">
+
+    <header class="max-headroom-relay-controller__section-header">
+      <h3>Diagnostics</h3>
+    </header>
+
+    <div class="max-headroom-relay-controller__status-grid">
+
+      <div class="max-headroom-relay-controller__status-label">
+        Socket
+      </div>
+
+      <div class="max-headroom-relay-controller__status-value">
+        {{#if socketInitialized}}
+          Initialized
+        {{else}}
+          Not Initialized
+        {{/if}}
+      </div>
+
+
+      <div class="max-headroom-relay-controller__status-label">
+        Socket Authority
+      </div>
+
+      <div class="max-headroom-relay-controller__status-value">
+        {{#if socketAuthoritative}}
+          This Client
+        {{else}}
+          Remote / None
+        {{/if}}
+      </div>
+
+
+      <div class="max-headroom-relay-controller__status-label">
+        Socket Channel
+      </div>
+
+      <div class="max-headroom-relay-controller__status-value max-headroom-relay-controller__monospace">
+        {{socketChannel}}
+      </div>
+
+
+      <div class="max-headroom-relay-controller__status-label">
+        Expected Origin
+      </div>
+
+      <div class="max-headroom-relay-controller__status-value max-headroom-relay-controller__monospace">
+        {{expectedOrigin}}
+      </div>
+
+    </div>
+
+
+    {{#if hasRejectedMessage}}
+
+      <div class="max-headroom-relay-controller__diagnostic-warning">
+
+        <strong>
+          Last Rejected Message
+        </strong>
+
+        <div>
+          {{lastRejectedMessage.reason}}
+        </div>
+
+      </div>
+
+    {{/if}}
+
+  </section>
+
+  {{!-- #endregion --}}
+
+</div>

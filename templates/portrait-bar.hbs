@@ -1,0 +1,65 @@
+{{!-- templates/portrait-bar.hbs --}}
+
+<div class="max-headroom-portrait-bar__inner">
+
+  {{#each portraits}}
+
+    <div
+      class="
+        max-headroom-portrait-tile
+        {{#if speaking}}is-speaking{{/if}}
+        {{#if muted}}is-muted{{/if}}
+        {{#if deafened}}is-deafened{{/if}}
+        {{#if hasImage}}has-image{{else}}missing-image{{/if}}
+      "
+      data-user-id="{{userId}}"
+      data-speaking="{{speaking}}"
+      data-muted="{{muted}}"
+      data-deafened="{{deafened}}"
+      aria-label="{{name}} reactive portrait"
+    >
+
+      {{!-- Portrait Image --}}
+      <div class="max-headroom-portrait-tile__image-wrapper">
+
+        {{#if hasImage}}
+          <img
+            class="max-headroom-portrait-tile__image"
+            data-role="portrait-image"
+            src="{{image}}"
+            alt="{{name}} reactive portrait"
+            draggable="false"
+          >
+        {{else}}
+          <img
+            class="max-headroom-portrait-tile__image"
+            data-role="portrait-image"
+            alt="{{name}} reactive portrait"
+            draggable="false"
+            hidden
+          >
+        {{/if}}
+
+        {{!-- Missing Image Placeholder --}}
+        <div
+          class="max-headroom-portrait-tile__placeholder"
+          data-role="portrait-placeholder"
+          {{#if hasImage}}hidden{{/if}}
+        >
+          <span>No Image</span>
+        </div>
+
+      </div>
+
+      {{!-- Optional User Name --}}
+      {{#if ../showNames}}
+        <div class="max-headroom-portrait-tile__name">
+          {{name}}
+        </div>
+      {{/if}}
+
+    </div>
+
+  {{/each}}
+
+</div>

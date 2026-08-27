@@ -7,8 +7,9 @@ import {
 } from "../../shared/protocol.js";
 
 import {
-  getSetting,
-  SETTING_KEYS
+  getPortraitPresentationSettings,
+  setUserBarPosition,
+  setUserBarScale
 } from "../settings.js";
 
 import {
@@ -30,6 +31,29 @@ const {
   ApplicationV2,
   HandlebarsApplicationMixin
 } = foundry.applications.api;
+
+// #endregion
+
+// #region Interaction Constants
+
+const MIN_BAR_SCALE = 0.5;
+const MAX_BAR_SCALE = 2.0;
+
+const VIEWPORT_MARGIN = 8;
+
+function clamp(
+  value,
+  minimum,
+  maximum
+) {
+  return Math.min(
+    maximum,
+    Math.max(
+      minimum,
+      value
+    )
+  );
+}
 
 // #endregion
 
@@ -174,27 +198,27 @@ export class ReactivePortraitBar extends HandlebarsApplicationMixin(
      * Unsubscribe callback returned by PortraitStateStore.subscribe().
      */
     this._unsubscribeState = null;
+    this._editMode = false;
+
+    this._interactionAbortController =
+      null;
+
+    this._pointerAbortController =
+      null;
+
+    this._dragState = null;
+    this._scaleState = null;
   }
 
   // #endregion
 
   // #region Context Preparation
 
-  /**
-   * Prepare the data used for a full portrait-bar render.
-   *
-   * Full rendering is intended for:
-   *
-   * - initial creation
-   * - configuration changes
-   * - user-list changes
-   * - layout-setting changes
-   *
-   * Speaking changes do not normally come through here.
-   */
   async _prepareContext(options) {
     const context =
-      await super._prepareContext(options);
+      await super._prepareContext(
+        options
+      );
 
     const configuredUsers =
       getConfiguredReactiveUsers();
@@ -205,37 +229,43 @@ export class ReactivePortraitBar extends HandlebarsApplicationMixin(
           buildPortraitViewModel(user)
       );
 
+    const presentation =
+      getPortraitPresentationSettings();
+
     return {
       ...context,
 
       portraits,
+
       hasUsers:
         portraits.length > 0,
 
       anchor:
-        getSetting(
-          SETTING_KEYS.BAR_ANCHOR
-        ),
+        presentation.anchor,
 
       orientation:
-        getSetting(
-          SETTING_KEYS.ORIENTATION
-        ),
+        presentation.orientation,
 
       tileSize:
-        getSetting(
-          SETTING_KEYS.TILE_SIZE
-        ),
+        presentation.tileSize,
 
       showNames:
-        getSetting(
-          SETTING_KEYS.SHOW_NAMES
-        ),
+        presentation.showNames,
 
       animationEnabled:
-        getSetting(
-          SETTING_KEYS.ANIMATION_ENABLED
-        )
+        presentation.animationEnabled,
+
+      positionX:
+        presentation.positionX,
+
+      positionY:
+        presentation.positionY,
+
+      hasCustomPosition:
+        presentation.hasCustomPosition,
+
+      scale:
+        presentation.scale
     };
   }
 
@@ -257,6 +287,19 @@ export class ReactivePortraitBar extends HandlebarsApplicationMixin(
     );
 
     this._ensureStateSubscription();
+    this._applyEditModeState();
+
+    this._attachInteractionListeners();
+
+  globalThis.requestAnimationFrame(
+    () => {
+      if (context.hasCustomPosition) {
+        this._clampCustomPosition();
+      }
+
+      this._updateLockPosition();
+    }
+  );
   }
 
   /**
@@ -264,7 +307,8 @@ export class ReactivePortraitBar extends HandlebarsApplicationMixin(
    */
   _onClose(options) {
     this._removeStateSubscription();
-
+    this._removeInteractionListeners();
+    this._endPointerInteraction();
     return super._onClose(options);
   }
 
@@ -272,21 +316,19 @@ export class ReactivePortraitBar extends HandlebarsApplicationMixin(
 
   // #region Presentation
 
-  /**
-   * Apply world-level presentation settings to the Application root.
-   *
-   * CSS will use these data attributes and variables to control docking
-   * and layout.
-   */
   _applyPresentationOptions(context) {
-    const element = this.element;
+    const element =
+      this.element;
 
     if (!element) {
       return;
     }
 
     element.dataset.anchor =
-      String(context.anchor ?? "bottom");
+      String(
+        context.anchor
+        ?? "bottom"
+      );
 
     element.dataset.orientation =
       String(
@@ -296,7 +338,9 @@ export class ReactivePortraitBar extends HandlebarsApplicationMixin(
 
     element.classList.toggle(
       "animations-enabled",
-      Boolean(context.animationEnabled)
+      Boolean(
+        context.animationEnabled
+      )
     );
 
     element.classList.toggle(
@@ -309,11 +353,720 @@ export class ReactivePortraitBar extends HandlebarsApplicationMixin(
       `${Number(context.tileSize) || 160}px`
     );
 
-    /*
-     * An unconfigured portrait bar should not occupy interface space.
-     */
+    const scale =
+      clamp(
+        Number(context.scale) || 1,
+        MIN_BAR_SCALE,
+        MAX_BAR_SCALE
+      );
+
+    element.style.setProperty(
+      "--max-headroom-user-scale",
+      String(scale)
+    );
+
+    if (context.hasCustomPosition) {
+      element.dataset.positionMode =
+        "custom";
+
+      element.style.left =
+        `${context.positionX}px`;
+
+      element.style.top =
+        `${context.positionY}px`;
+
+      element.style.right =
+        "auto";
+
+      element.style.bottom =
+        "auto";
+
+      element.style.transform =
+        "none";
+    } else {
+      element.dataset.positionMode =
+        "anchor";
+
+      element.style.removeProperty(
+        "left"
+      );
+
+      element.style.removeProperty(
+        "top"
+      );
+
+      element.style.removeProperty(
+        "right"
+      );
+
+      element.style.removeProperty(
+        "bottom"
+      );
+
+      element.style.removeProperty(
+        "transform"
+      );
+    }
+
     element.hidden =
       !context.hasUsers;
+  }
+
+  /**
+ * Position the unscaled lock control over the actual rendered
+ * top-right corner of the scaled Portrait Bar.
+ */
+_updateLockPosition() {
+  const element =
+    this.element;
+
+  if (!element) {
+    return;
+  }
+
+  const inner =
+    element.querySelector(
+      ".max-headroom-portrait-bar__inner"
+    );
+
+  const lock =
+    element.querySelector(
+      '[data-role="edit-toggle"]'
+    );
+
+  if (
+    !inner
+    || !lock
+  ) {
+    return;
+  }
+
+  /*
+   * getBoundingClientRect() includes the current CSS scale transform.
+   */
+  const innerRect =
+    inner.getBoundingClientRect();
+
+  const rootRect =
+    element.getBoundingClientRect();
+
+  lock.style.left =
+    `${innerRect.right - rootRect.left}px`;
+
+  lock.style.top =
+    `${innerRect.top - rootRect.top}px`;
+}
+
+
+  // #endregion
+
+  // #region Edit Mode Actions
+
+  async _onClickAction(
+    event,
+    target
+  ) {
+    if (
+      target.dataset.action
+      === "toggleEditMode"
+    ) {
+      this._editMode =
+        !this._editMode;
+
+      if (!this._editMode) {
+        this._endPointerInteraction();
+      }
+
+      this._applyEditModeState();
+
+      return;
+    }
+
+    return super._onClickAction(
+      event,
+      target
+    );
+  }
+
+
+  _applyEditModeState() {
+    const element =
+      this.element;
+
+    if (!element) {
+      return;
+    }
+
+    element.classList.toggle(
+      "is-editing",
+      this._editMode
+    );
+
+    const button =
+      element.querySelector(
+        '[data-role="edit-toggle"]'
+      );
+
+    const icon =
+      element.querySelector(
+        '[data-role="lock-icon"]'
+      );
+
+    if (button) {
+      button.title =
+        this._editMode
+          ? "Lock Portrait Bar"
+          : "Unlock Portrait Bar";
+
+      button.setAttribute(
+        "aria-label",
+        button.title
+      );
+    }
+
+    if (icon) {
+      icon.classList.toggle(
+        "fa-lock",
+        !this._editMode
+      );
+
+      icon.classList.toggle(
+        "fa-lock-open",
+        this._editMode
+      );
+    }
+  }
+
+  // #endregion
+
+  // #region Drag and Proportional Scaling
+
+  _attachInteractionListeners() {
+    this._removeInteractionListeners();
+
+    if (!this.element) {
+      return;
+    }
+
+    this._interactionAbortController =
+      new AbortController();
+
+    const signal =
+      this._interactionAbortController.signal;
+
+    const dragSurface =
+      this.element.querySelector(
+        '[data-role="drag-surface"]'
+      );
+
+    const scaleHandle =
+      this.element.querySelector(
+        '[data-role="scale-handle"]'
+      );
+
+    dragSurface?.addEventListener(
+      "pointerdown",
+      (event) => {
+        this._beginDrag(event);
+      },
+      {
+        signal
+      }
+    );
+
+    scaleHandle?.addEventListener(
+      "pointerdown",
+      (event) => {
+        event.stopPropagation();
+
+        this._beginScale(event);
+      },
+      {
+        signal
+      }
+    );
+  }
+
+
+  _removeInteractionListeners() {
+    this._interactionAbortController
+      ?.abort();
+
+    this._interactionAbortController =
+      null;
+  }
+
+
+  _beginDrag(event) {
+  if (
+    !this._editMode
+    || event.button !== 0
+    || event.target.closest(
+      '[data-role="scale-handle"]'
+    )
+    || event.target.closest(
+      '[data-role="edit-toggle"]'
+    )
+  ) {
+    return;
+  }
+
+    const inner =
+      this.element?.querySelector(
+        ".max-headroom-portrait-bar__inner"
+      );
+
+    if (!inner) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const rect =
+      inner.getBoundingClientRect();
+
+    this._setCustomPosition(
+      rect.left,
+      rect.top
+    );
+
+    this._dragState = {
+      pointerX:
+        event.clientX,
+
+      pointerY:
+        event.clientY,
+
+      left:
+        rect.left,
+
+      top:
+        rect.top
+    };
+
+    this._scaleState =
+      null;
+
+    this._startPointerInteraction();
+  }
+
+
+  _beginScale(event) {
+    if (
+      !this._editMode
+      || event.button !== 0
+    ) {
+      return;
+    }
+
+    const inner =
+      this.element?.querySelector(
+        ".max-headroom-portrait-bar__inner"
+      );
+
+    if (!inner) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const rect =
+      inner.getBoundingClientRect();
+
+    const currentScale =
+      this._getCurrentScale();
+
+    /*
+    * Scaling switches an anchored bar into custom-position mode while
+    * preserving its current visible top-left location.
+    */
+    this._setCustomPosition(
+      rect.left,
+      rect.top
+    );
+
+    const distance =
+      Math.max(
+        1,
+        Math.hypot(
+          event.clientX - rect.left,
+          event.clientY - rect.top
+        )
+      );
+
+    this._scaleState = {
+      left:
+        rect.left,
+
+      top:
+        rect.top,
+
+      startScale:
+        currentScale,
+
+      startDistance:
+        distance
+    };
+
+    this._dragState =
+      null;
+
+    this._startPointerInteraction();
+  }
+
+
+_startPointerInteraction() {
+  this._pointerAbortController
+    ?.abort();
+
+  this._pointerAbortController =
+    null;
+
+  this._pointerAbortController =
+    new AbortController();
+
+    const signal =
+      this._pointerAbortController.signal;
+
+    globalThis.addEventListener(
+      "pointermove",
+      (event) => {
+        this._handlePointerMove(
+          event
+        );
+      },
+      {
+        signal
+      }
+    );
+
+    globalThis.addEventListener(
+      "pointerup",
+      () => {
+        this._finishPointerInteraction();
+      },
+      {
+        signal,
+        once: true
+      }
+    );
+
+    globalThis.addEventListener(
+      "pointercancel",
+      () => {
+        this._finishPointerInteraction();
+      },
+      {
+        signal,
+        once: true
+      }
+    );
+  }
+
+
+  _handlePointerMove(event) {
+    if (this._dragState) {
+      const deltaX =
+        event.clientX
+        - this._dragState.pointerX;
+
+      const deltaY =
+        event.clientY
+        - this._dragState.pointerY;
+
+      const position =
+        this._clampPosition(
+          this._dragState.left
+            + deltaX,
+
+          this._dragState.top
+            + deltaY,
+
+          this._getCurrentScale()
+        );
+
+      this._setCustomPosition(
+        position.left,
+        position.top
+      );
+
+      this._updateLockPosition();
+
+      return;
+    }
+
+    if (this._scaleState) {
+      const distance =
+        Math.max(
+          1,
+          Math.hypot(
+            event.clientX
+              - this._scaleState.left,
+
+            event.clientY
+              - this._scaleState.top
+          )
+        );
+
+      const ratio =
+        distance
+        / this._scaleState.startDistance;
+
+      const scale =
+        clamp(
+          this._scaleState.startScale
+            * ratio,
+
+          MIN_BAR_SCALE,
+          MAX_BAR_SCALE
+        );
+
+      this.element.style.setProperty(
+        "--max-headroom-user-scale",
+        String(scale)
+      );
+
+      const position =
+        this._clampPosition(
+          this._scaleState.left,
+          this._scaleState.top,
+          scale
+        );
+
+      this._setCustomPosition(
+        position.left,
+        position.top
+      );
+
+      this._updateLockPosition();
+    }
+  }
+
+
+  async _finishPointerInteraction() {
+    const hadInteraction =
+      Boolean(
+        this._dragState
+        || this._scaleState
+      );
+
+    const left =
+      Number.parseFloat(
+        this.element?.style.left
+        ?? ""
+      );
+
+    const top =
+      Number.parseFloat(
+        this.element?.style.top
+        ?? ""
+      );
+
+    const scale =
+      this._getCurrentScale();
+
+    this._endPointerInteraction(
+      false
+    );
+
+    if (
+      !hadInteraction
+      || !Number.isFinite(left)
+      || !Number.isFinite(top)
+    ) {
+      return;
+    }
+
+    await setUserBarPosition(
+      left,
+      top
+    );
+
+    await setUserBarScale(
+      scale
+    );
+  }
+
+
+  _endPointerInteraction(
+    clearState = true
+  ) {
+    this._pointerAbortController
+      ?.abort();
+
+    this._pointerAbortController =
+      null;
+
+    if (clearState) {
+      this._dragState =
+        null;
+
+      this._scaleState =
+        null;
+    }
+  }
+
+
+  _setCustomPosition(
+    left,
+    top
+  ) {
+    if (!this.element) {
+      return;
+    }
+
+    this.element.dataset.positionMode =
+      "custom";
+
+    this.element.style.left =
+      `${Math.round(left)}px`;
+
+    this.element.style.top =
+      `${Math.round(top)}px`;
+
+    this.element.style.right =
+      "auto";
+
+    this.element.style.bottom =
+      "auto";
+
+    this.element.style.transform =
+      "none";
+  }
+
+
+  _getCurrentScale() {
+    if (!this.element) {
+      return 1;
+    }
+
+    const value =
+      Number.parseFloat(
+        globalThis
+          .getComputedStyle(
+            this.element
+          )
+          .getPropertyValue(
+            "--max-headroom-user-scale"
+          )
+      );
+
+    return Number.isFinite(value)
+      ? clamp(
+          value,
+          MIN_BAR_SCALE,
+          MAX_BAR_SCALE
+        )
+      : 1;
+  }
+
+
+  _getScaledBarSize(scale) {
+    const inner =
+      this.element?.querySelector(
+        ".max-headroom-portrait-bar__inner"
+      );
+
+    if (!inner) {
+      return {
+        width: 0,
+        height: 0
+      };
+    }
+
+    return {
+      width:
+        inner.offsetWidth
+        * scale,
+
+      height:
+        inner.offsetHeight
+        * scale
+    };
+  }
+
+
+  _clampPosition(
+    left,
+    top,
+    scale
+  ) {
+    const size =
+      this._getScaledBarSize(
+        scale
+      );
+
+    const maxLeft =
+      Math.max(
+        VIEWPORT_MARGIN,
+        globalThis.innerWidth
+          - size.width
+          - VIEWPORT_MARGIN
+      );
+
+    const maxTop =
+      Math.max(
+        VIEWPORT_MARGIN,
+        globalThis.innerHeight
+          - size.height
+          - VIEWPORT_MARGIN
+      );
+
+    return {
+      left:
+        clamp(
+          left,
+          VIEWPORT_MARGIN,
+          maxLeft
+        ),
+
+      top:
+        clamp(
+          top,
+          VIEWPORT_MARGIN,
+          maxTop
+        )
+    };
+  }
+
+
+  _clampCustomPosition() {
+    if (
+      !this.element
+      || this.element.dataset.positionMode
+        !== "custom"
+    ) {
+      return;
+    }
+
+    const left =
+      Number.parseFloat(
+        this.element.style.left
+      );
+
+    const top =
+      Number.parseFloat(
+        this.element.style.top
+      );
+
+    if (
+      !Number.isFinite(left)
+      || !Number.isFinite(top)
+    ) {
+      return;
+    }
+
+    const position =
+      this._clampPosition(
+        left,
+        top,
+        this._getCurrentScale()
+      );
+
+    this._setCustomPosition(
+      position.left,
+      position.top
+    );
   }
 
   // #endregion

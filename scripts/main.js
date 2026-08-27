@@ -8,8 +8,13 @@ import {
 } from "../shared/protocol.js";
 
 import {
-  registerSettings
+  registerSettings,
+  isPortraitRenderSettingKey
 } from "./settings.js";
+
+import {
+  registerPortraitPreferencesMenu
+} from "./portraits/portrait-preferences-app.js";
 
 import {
   portraitBar
@@ -90,7 +95,9 @@ Hooks.once("init", () => {
   // #region Register Settings
 
   registerSettings();
+
   registerPortraitConfigMenu();
+  registerPortraitPreferencesMenu();
   registerRelayControllerMenu();
 
   // #endregion
@@ -164,6 +171,34 @@ try {
   }
 
   // #endregion
+
+  // #region Portrait Presentation Setting Updates
+
+Hooks.on(
+  "updateSetting",
+  (setting) => {
+    if (
+      !isPortraitRenderSettingKey(
+        setting.key
+      )
+    ) {
+      return;
+    }
+
+    portraitBar
+      .refresh()
+      .catch(
+        (error) => {
+          console.error(
+            `${LOG_PREFIX} Failed to refresh Portrait Bar after a presentation setting changed.`,
+            error
+          );
+        }
+      );
+  }
+);
+
+// #endregion
   
 // #region Request Initial State Sync
 

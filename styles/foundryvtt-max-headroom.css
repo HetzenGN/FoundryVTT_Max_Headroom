@@ -7,6 +7,7 @@
   --max-headroom-bar-gap: 10px;
   --max-headroom-speaking-scale: 1.06;
   --max-headroom-transition-speed: 140ms;
+  --max-headroom-user-scale: 1;
 
   position: fixed;
   z-index: 70;
@@ -23,11 +24,16 @@
 
   overflow: visible;
 
+
   /*
    * The portrait overlay itself should not block interaction with
    * the Foundry canvas or UI beneath it.
    */
   pointer-events: none;
+}
+
+.max-headroom-portrait-bar.is-editing {
+  pointer-events: auto;
 }
 
 .max-headroom-portrait-bar[hidden] {
@@ -43,44 +49,39 @@
 
 /* #region Bar Anchoring */
 
-/*
- * Bottom
- */
-.max-headroom-portrait-bar[data-anchor="bottom"] {
+.max-headroom-portrait-bar[data-position-mode="anchor"][data-anchor="bottom"] {
   left: 50%;
   bottom: 12px;
 
   transform: translateX(-50%);
 }
 
-/*
- * Top
- */
-.max-headroom-portrait-bar[data-anchor="top"] {
+.max-headroom-portrait-bar[data-position-mode="anchor"][data-anchor="top"] {
   left: 50%;
   top: 12px;
 
   transform: translateX(-50%);
 }
 
-/*
- * Left
- */
-.max-headroom-portrait-bar[data-anchor="left"] {
+.max-headroom-portrait-bar[data-position-mode="anchor"][data-anchor="left"] {
   left: 12px;
   top: 50%;
 
   transform: translateY(-50%);
 }
 
-/*
- * Right
- */
-.max-headroom-portrait-bar[data-anchor="right"] {
+.max-headroom-portrait-bar[data-position-mode="anchor"][data-anchor="right"] {
   right: 12px;
   top: 50%;
 
   transform: translateY(-50%);
+}
+
+.max-headroom-portrait-bar[data-position-mode="custom"] {
+  right: auto;
+  bottom: auto;
+
+  transform: none;
 }
 
 /* #endregion */
@@ -103,6 +104,55 @@
   padding: 0;
 
   overflow: visible;
+
+  position: relative;
+
+  transform:
+    scale(
+      var(--max-headroom-user-scale)
+    );
+
+  transform-origin: center center;
+}
+
+.max-headroom-portrait-bar__shell {
+  position: relative;
+
+  width: max-content;
+  height: max-content;
+
+  overflow: visible;
+}
+
+.max-headroom-portrait-bar[data-position-mode="anchor"][data-anchor="bottom"]
+  .max-headroom-portrait-bar__inner {
+  transform-origin: center bottom;
+}
+
+.max-headroom-portrait-bar[data-position-mode="anchor"][data-anchor="top"]
+  .max-headroom-portrait-bar__inner {
+  transform-origin: center top;
+}
+
+.max-headroom-portrait-bar[data-position-mode="anchor"][data-anchor="left"]
+  .max-headroom-portrait-bar__inner {
+  transform-origin: left center;
+}
+
+.max-headroom-portrait-bar[data-position-mode="anchor"][data-anchor="right"]
+  .max-headroom-portrait-bar__inner {
+  transform-origin: right center;
+}
+
+.max-headroom-portrait-bar[data-position-mode="custom"]
+  .max-headroom-portrait-bar__inner {
+  transform-origin: left top;
+}
+
+.max-headroom-portrait-bar.is-editing
+  .max-headroom-portrait-bar__inner {
+  cursor: move;
+  user-select: none;
 }
 
 /*
@@ -121,6 +171,117 @@
   .max-headroom-portrait-bar__inner {
   flex-direction: column;
   align-items: center;
+}
+
+/* #endregion */
+
+/* #region Portrait Bar Edit Controls */
+
+.max-headroom-portrait-bar__lock {
+  position: absolute;
+
+  z-index: 20;
+
+  /*
+   * JS supplies left/top based on the transformed bar bounds.
+   */
+  left: 0;
+  top: 0;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  width: 20px;
+  height: 20px;
+
+  margin: 0;
+  padding: 0;
+
+  border: 0;
+  border-radius: 50%;
+
+  background:
+    rgba(
+      0,
+      0,
+      0,
+      0.55
+    );
+
+  color: #ffffff;
+
+  box-shadow: none;
+
+  opacity: 0.65;
+
+  cursor: pointer;
+
+  pointer-events: auto;
+
+  /*
+   * Center the control over the calculated corner.
+   */
+  transform:
+    translate(
+      -50%,
+      -50%
+    );
+
+  transition:
+    opacity 120ms ease,
+    background 120ms ease;
+}
+
+.max-headroom-portrait-bar__lock:hover,
+.max-headroom-portrait-bar.is-editing
+  .max-headroom-portrait-bar__lock {
+  opacity: 1;
+}
+
+.max-headroom-portrait-bar__scale-handle {
+  position: absolute;
+
+  z-index: 20;
+
+  right: -10px;
+  bottom: -10px;
+
+  display: none;
+
+  align-items: center;
+  justify-content: center;
+
+  width: 20px;
+  height: 20px;
+
+  margin: 0;
+  padding: 0;
+
+  border: 0;
+  border-radius: 50%;
+
+  background:
+    rgba(
+      0,
+      0,
+      0,
+      0.55
+    );
+
+  color: #ffffff;
+
+  box-shadow: none;
+
+  cursor: nwse-resize;
+
+  pointer-events: auto;
+}
+
+.max-headroom-portrait-bar.is-editing
+  .max-headroom-portrait-bar__scale-handle {
+  display: flex;
 }
 
 /* #endregion */
@@ -1201,5 +1362,90 @@
 /* #endregion */
 
 /* #endregion */
+
+/* #endregion */
+
+/* #region User Portrait Bar Preferences */
+
+.max-headroom-portrait-preferences__section
+  .form-group {
+  margin-bottom: 18px;
+}
+
+.max-headroom-portrait-preferences__section
+  .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.max-headroom-portrait-preferences__section
+  .form-group
+  .notes {
+  margin-top: 5px;
+  margin-bottom: 0;
+}
+
+.max-headroom-portrait-preferences .window-content {
+  padding: 0;
+
+  overflow: hidden;
+}
+
+.max-headroom-portrait-preferences__section + 
+.max-headroom-portrait-preferences__section {
+  padding-top: 18px;
+}
+
+.max-headroom-portrait-preferences__content {
+  display: flex;
+  flex-direction: column;
+
+  height: 100%;
+  min-height: 0;
+
+  overflow: hidden;
+}
+
+.max-headroom-portrait-preferences__section {
+  flex: 0 0 auto;
+
+  padding: 14px;
+
+  border-bottom:
+    1px solid
+    var(--color-border-light-primary);
+}
+
+
+.max-headroom-portrait-preferences__section h3 {
+  margin-top: 0;
+}
+
+.max-headroom-portrait-preferences__section:first-child {
+  overflow-y: auto;
+}
+
+.max-headroom-portrait-preferences__footer {
+  display: flex;
+
+  flex: 0 0 auto;
+
+  justify-content: flex-end;
+
+  margin-top: auto;
+
+  padding: 12px 14px 16px;
+
+  border-top:
+    1px solid
+    var(--color-border-light-primary);
+}
+
+.max-headroom-portrait-preferences__footer button {
+  width: auto;
+
+  min-width: 160px;
+
+  margin: 0;
+}
 
 /* #endregion */

@@ -1,65 +1,114 @@
 {{!-- templates/portrait-bar.hbs --}}
 
-<div class="max-headroom-portrait-bar__inner">
+<div class="max-headroom-portrait-bar__shell">
 
-  {{#each portraits}}
+  {{!-- #region Edit Toggle --}}
 
-    <div
-      class="
-        max-headroom-portrait-tile
-        {{#if speaking}}is-speaking{{/if}}
-        {{#if muted}}is-muted{{/if}}
-        {{#if deafened}}is-deafened{{/if}}
-        {{#if hasImage}}has-image{{else}}missing-image{{/if}}
-      "
-      data-user-id="{{userId}}"
-      data-speaking="{{speaking}}"
-      data-muted="{{muted}}"
-      data-deafened="{{deafened}}"
-      aria-label="{{name}} reactive portrait"
-    >
+  <button
+    type="button"
+    class="max-headroom-portrait-bar__lock"
+    data-action="toggleEditMode"
+    data-role="edit-toggle"
+    title="Unlock Portrait Bar"
+    aria-label="Unlock Portrait Bar"
+  >
+    <i
+      class="fa-solid fa-lock"
+      data-role="lock-icon"
+    ></i>
+  </button>
 
-      {{!-- Portrait Image --}}
-      <div class="max-headroom-portrait-tile__image-wrapper">
+  <div
+    class="max-headroom-portrait-bar__inner"
+    data-role="drag-surface"
+  >
 
-        {{#if hasImage}}
-          <img
-            class="max-headroom-portrait-tile__image"
-            data-role="portrait-image"
-            src="{{image}}"
-            alt="{{name}} reactive portrait"
-            draggable="false"
+    {{#each portraits}}
+
+      <div
+        class="
+          max-headroom-portrait-tile
+          {{#if speaking}}is-speaking{{/if}}
+          {{#if muted}}is-muted{{/if}}
+          {{#if deafened}}is-deafened{{/if}}
+          {{#if hasImage}}has-image{{else}}missing-image{{/if}}
+        "
+        data-user-id="{{userId}}"
+        data-speaking="{{speaking}}"
+        data-muted="{{muted}}"
+        data-deafened="{{deafened}}"
+        aria-label="{{name}} reactive portrait"
+      >
+
+        {{!-- #region Portrait Image --}}
+
+        <div class="max-headroom-portrait-tile__image-wrapper">
+
+          {{#if hasImage}}
+
+            <img
+              class="max-headroom-portrait-tile__image"
+              data-role="portrait-image"
+              src="{{image}}"
+              alt="{{name}} reactive portrait"
+              draggable="false"
+            >
+
+          {{else}}
+
+            <img
+              class="max-headroom-portrait-tile__image"
+              data-role="portrait-image"
+              alt="{{name}} reactive portrait"
+              draggable="false"
+              hidden
+            >
+
+          {{/if}}
+
+
+          <div
+            class="max-headroom-portrait-tile__placeholder"
+            data-role="portrait-placeholder"
+            {{#if hasImage}}hidden{{/if}}
           >
-        {{else}}
-          <img
-            class="max-headroom-portrait-tile__image"
-            data-role="portrait-image"
-            alt="{{name}} reactive portrait"
-            draggable="false"
-            hidden
-          >
+            <span>No Image</span>
+          </div>
+
+        </div>
+
+        {{!-- #endregion --}}
+
+
+        {{!-- #region Optional User Name --}}
+
+        {{#if ../showNames}}
+
+          <div class="max-headroom-portrait-tile__name">
+            {{name}}
+          </div>
+
         {{/if}}
 
-        {{!-- Missing Image Placeholder --}}
-        <div
-          class="max-headroom-portrait-tile__placeholder"
-          data-role="portrait-placeholder"
-          {{#if hasImage}}hidden{{/if}}
-        >
-          <span>No Image</span>
-        </div>
+        {{!-- #endregion --}}
 
       </div>
 
-      {{!-- Optional User Name --}}
-      {{#if ../showNames}}
-        <div class="max-headroom-portrait-tile__name">
-          {{name}}
-        </div>
-      {{/if}}
+    {{/each}}
 
-    </div>
 
-  {{/each}}
+    {{!-- #region Scale Handle --}}
+
+    <button
+      type="button"
+      class="max-headroom-portrait-bar__scale-handle"
+      data-role="scale-handle"
+      title="Drag to resize Portrait Bar"
+      aria-label="Resize Portrait Bar"
+    >
+      <i class="fa-solid fa-up-right-and-down-left-from-center"></i>
+    </button>
+
+  </div>
 
 </div>

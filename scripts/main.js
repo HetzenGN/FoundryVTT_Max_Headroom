@@ -70,6 +70,24 @@ const moduleApi = {
   MODULE_ID,
   PROTOCOL_VERSION,
 
+
+  /**
+   * Chromium companion-extension ingress.
+   *
+   * This intentionally exposes only the small
+   * extension transport envelope, not RelayState
+   * mutation APIs.
+   */
+  receiveExtensionSpeakingEvent(
+    payload
+  ) {
+    return relayController
+      .receiveExtensionSpeakingEvent(
+        payload
+      );
+  },
+
+
   ...portraitDebugApi,
   ...relayDebugApi
 };

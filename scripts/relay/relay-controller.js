@@ -8,6 +8,7 @@ import {
   MESSAGE_TYPES,
   MESSAGE_SOURCES,
   nowTs,
+  makeDiscordSpeaking,
   isDiscordSpeakingMessage,
   normalizeDiscordSpeakingMessage
 } from "../../shared/protocol.js";
@@ -145,7 +146,6 @@ function normalizeOrigin(value) {
   }
 }
 
-
 /**
  * Return whether a timestamp is reasonable for a live relay packet.
  */
@@ -210,6 +210,10 @@ export class RelayController {
     this._popupCheckTimer = null;
 
     this._lastRejectedMessage = null;
+
+    this._extensionIngressCount = 0;
+
+    this._lastExtensionEventAt = null;
 
     this._boundMessageHandler =
       this._onWindowMessage.bind(this);
@@ -752,6 +756,259 @@ export class RelayController {
 
   // #endregion
 
+  // #region Extension Ingress
+
+/**
+ * Receive one speaking event delivered by the
+ * Max Headroom Chromium companion extension.
+ *
+ * The extension transport does NOT enter through
+ * _validateWindowMessage(). That validator belongs
+ * specifically to the legacy popup/postMessage
+ * transport and remains unchanged.
+ *
+ * Once the extension-specific envelope is validated,
+ * it is converted into the normal shared-protocol
+ * DISCORD_SPEAKING message and enters the existing
+ * relay processing path.
+ */
+receiveExtensionSpeakingEvent(
+  rawPayload
+) {
+  if (
+    !game.user?.isGM
+    || !this._isLocalHost
+  ) {
+    return {
+      ok: false,
+      error:
+        "not-relay-host"
+    };
+  }
+
+
+  const validation =
+    this._validateExtensionSpeakingEvent(
+      rawPayload
+    );
+
+
+  if (!validation.valid) {
+    this._recordRejectedMessage(
+      `Extension ingress: ${validation.reason}`,
+      rawPayload
+    );
+
+    return {
+      ok: false,
+
+      error:
+        "invalid-extension-payload",
+
+      reason:
+        validation.reason
+    };
+  }
+
+
+  const extensionEvent =
+    validation.payload;
+
+
+  /*
+   * The extension never receives or supplies the
+   * Foundry relay nonce.
+   *
+   * Once its transport envelope has been validated,
+   * the authoritative GM controller creates the
+   * canonical protocol message itself using its
+   * private current-session nonce.
+   */
+  const protocolPayload =
+    makeDiscordSpeaking({
+      nonce:
+        this._nonce,
+
+      discordUserId:
+        extensionEvent.discordUserId,
+
+      speaking:
+        extensionEvent.speaking,
+
+      channelId:
+        extensionEvent.channelId,
+
+      timestamp:
+        extensionEvent.observedAt,
+
+      source:
+        MESSAGE_SOURCES.STREAMKIT
+    });
+
+
+  this._extensionIngressCount += 1;
+
+  this._lastExtensionEventAt =
+    nowTs();
+
+
+  /*
+   * From this point onward there is no special
+   * extension code path.
+   *
+   * Mapping, normalization, authoritative state,
+   * unmapped-user diagnostics and sockets all use
+   * the existing relay implementation.
+   */
+  this._processRelayPayload(
+    protocolPayload
+  );
+
+
+  return {
+    ok: true,
+
+    type:
+      protocolPayload.type,
+
+    discordUserId:
+      protocolPayload.discordUserId,
+
+    speaking:
+      protocolPayload.speaking
+  };
+}
+
+
+/**
+ * Validate the small transport envelope supplied
+ * by the Chromium extension.
+ */
+_validateExtensionSpeakingEvent(
+  payload
+) {
+  if (
+    !payload
+    || typeof payload !== "object"
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension payload is not an object."
+    };
+  }
+
+
+  const discordUserId =
+    typeof payload.discordUserId
+      === "string"
+      ? payload.discordUserId.trim()
+      : "";
+
+
+  if (
+    !discordUserId
+    || !/^\d+$/.test(
+      discordUserId
+    )
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension payload has an invalid Discord User ID."
+    };
+  }
+
+
+  const channelId =
+    typeof payload.channelId
+      === "string"
+      ? payload.channelId.trim()
+      : "";
+
+
+  if (
+    !channelId
+    || !/^\d+$/.test(
+      channelId
+    )
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension payload has an invalid Discord channel ID."
+    };
+  }
+
+  if (
+    typeof payload.speaking
+      !== "boolean"
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension payload has an invalid speaking state."
+    };
+  }
+
+
+  const expectedEventName =
+    payload.speaking
+      ? "SPEAKING_START"
+      : "SPEAKING_STOP";
+
+
+  if (
+    payload.eventName
+    !== expectedEventName
+  ) {
+    return {
+      valid: false,
+
+      reason:
+        `Extension event name does not match speaking=${String(payload.speaking)}.`
+    };
+  }
+
+
+  const observedAt =
+    Number(
+      payload.observedAt
+    );
+
+
+  if (
+    !isFreshTimestamp(
+      observedAt
+    )
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension speaking event timestamp is stale or invalid."
+    };
+  }
+
+
+  return {
+    valid: true,
+
+    payload: {
+      discordUserId,
+      channelId,
+
+      speaking:
+        payload.speaking,
+
+      eventName:
+        expectedEventName,
+
+      observedAt
+    }
+  };
+}
+
+// #endregion
 
   // #region postMessage Validation
 
@@ -1164,6 +1421,12 @@ export class RelayController {
             SETTING_KEYS.RELAY_ORIGIN
           )
         ),
+
+      extensionIngressCount:
+          this._extensionIngressCount,
+
+      lastExtensionEventAt:
+          this._lastExtensionEventAt,
 
       lastRejectedMessage:
         this._lastRejectedMessage

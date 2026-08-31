@@ -25,7 +25,6 @@ const LOG_PREFIX = "[FoundryVTT_Max_Headroom]";
  */
 export const RELAY_STATUS = Object.freeze({
   DISCONNECTED: "disconnected",
-  CONNECTING: "connecting",
   CONNECTED: "connected",
   STALE: "stale",
   INCOMPATIBLE: "incompatible",
@@ -50,6 +49,8 @@ export const RELAY_STATE_EVENTS = Object.freeze({
  * while remaining inexpensive.
  */
 const WATCHDOG_INTERVAL_MS = 500;
+
+const DEFAULT_RELAY_HEARTBEAT_TIMEOUT_MS = 90000;
 
 // #endregion
 
@@ -137,26 +138,6 @@ function getStaleSpeakerTimeoutMs() {
 }
 
 /**
- * Return the configured relay-heartbeat timeout.
- */
-function getRelayHeartbeatTimeoutMs() {
-  const value = Number(
-    getSetting(
-      SETTING_KEYS.RELAY_HEARTBEAT_TIMEOUT_MS
-    )
-  );
-
-  if (!Number.isFinite(value)) {
-    return 15000;
-  }
-
-  return Math.max(
-    1000,
-    value
-  );
-}
-
-/**
  * Verify that authoritative relay mutations are being performed by a GM.
  */
 function requireGM() {
@@ -223,8 +204,6 @@ export class RelayStateStore {
     this._heartbeatTimeoutOverrideMs =
       null;
 
-    this._popupOpen = false;
-
     this._lastError = null;
 
     // #endregion
@@ -281,7 +260,7 @@ export class RelayStateStore {
 
       heartbeatTimeoutMs:
         this._heartbeatTimeoutOverrideMs
-        ?? getRelayHeartbeatTimeoutMs(),
+        ?? DEFAULT_RELAY_HEARTBEAT_TIMEOUT_MS,
 
       lastValidDiscordEvent:
         this._lastValidDiscordEvent,
@@ -291,9 +270,6 @@ export class RelayStateStore {
 
       relayScriptVersion:
         this._relayScriptVersion,
-
-      popupOpen:
-        this._popupOpen,
 
       lastError:
         this._lastError
@@ -305,16 +281,6 @@ export class RelayStateStore {
 
   // #region Relay Health Writers
 
-  /**
-   * Mark the relay as connecting.
-   */
-  markConnecting() {
-    requireGM();
-
-    this._setRelayStatus(
-      RELAY_STATUS.CONNECTING
-    );
-  }
 
   /**
    * Mark the relay as ready/connected.
@@ -440,10 +406,10 @@ export class RelayStateStore {
   markDisconnected() {
     requireGM();
 
-    this._popupOpen = false;
 
     this._heartbeatTimeoutOverrideMs =
       null;
+
 
     this._setRelayStatus(
       RELAY_STATUS.DISCONNECTED
@@ -480,24 +446,6 @@ export class RelayStateStore {
     this._setRelayStatus(
       RELAY_STATUS.ERROR
     );
-  }
-
-  /**
-   * Record whether the StreamKit popup is believed to be open.
-   */
-  setPopupOpen(open) {
-    requireGM();
-
-    this._popupOpen =
-      Boolean(open);
-
-    this._emit({
-      type:
-        RELAY_STATE_EVENTS.RELAY_STATUS,
-
-      health:
-        this.getRelayHealth()
-    });
   }
 
   /**
@@ -589,17 +537,13 @@ export class RelayStateStore {
 
   // #region Speaking State Writers
 
-  /**
-   * Apply one normalized authoritative Discord speaking update.
-   *
-   * This expects the relay controller to have already performed:
-   *
-   * - origin validation
-   * - nonce validation
-   * - protocol validation
-   * - message validation
-   * - normalization
-   */
+/**
+ * Apply one normalized authoritative Discord speaking update.
+ *
+ * This expects the Relay Controller to have already
+ * validated and normalized the companion-extension
+ * speaking envelope.
+ */
   updateSpeakingState(
     update
   ) {
@@ -943,7 +887,7 @@ export class RelayStateStore {
 
     const timeout =
       this._heartbeatTimeoutOverrideMs
-      ?? getRelayHeartbeatTimeoutMs();
+      ?? DEFAULT_RELAY_HEARTBEAT_TIMEOUT_MS;
 
     if (
       currentTime

@@ -3,9 +3,7 @@
 // #region Imports
 
 import {
-  MODULE_ID,
   PROTOCOL_VERSION,
-  MESSAGE_TYPES,
   MESSAGE_SOURCES,
   nowTs,
   makeDiscordSpeaking,
@@ -55,34 +53,10 @@ const RELAY_POPUP_FEATURES = [
   "scrollbars=yes"
 ].join(",");
 
-const POPUP_CHECK_INTERVAL_MS = 1000;
-
 const MAX_MESSAGE_AGE_MS = 60000;
 const MAX_FUTURE_SKEW_MS = 5000;
 
 const EXTENSION_HEARTBEAT_TIMEOUT_MS = 90000;
-
-/**
- * Query-string fields supplied to the external StreamKit relay.
- *
- * The external relay userscript will later consume these.
- */
-export const RELAY_QUERY_KEYS =
-  Object.freeze({
-    NONCE: "maxHeadroomNonce",
-    PROTOCOL: "maxHeadroomProtocol",
-    OPENER_ORIGIN:
-      "maxHeadroomOpenerOrigin"
-  });
-
-const ACCEPTED_RELAY_TYPES =
-  new Set([
-    MESSAGE_TYPES.RELAY_READY,
-    MESSAGE_TYPES.RELAY_HEARTBEAT,
-    MESSAGE_TYPES.DISCORD_SPEAKING,
-    MESSAGE_TYPES.RELAY_ERROR,
-    MESSAGE_TYPES.RELAY_DEBUG
-  ]);
 
 // #endregion
 
@@ -109,46 +83,6 @@ function requireGM() {
     throw new Error(
       `${LOG_PREFIX} Relay-host control is GM-only.`
     );
-  }
-}
-
-
-/**
- * Generate a per-session nonce using the browser cryptography API.
- */
-function generateNonce() {
-  const bytes =
-    new Uint8Array(24);
-
-  globalThis.crypto.getRandomValues(
-    bytes
-  );
-
-  return Array.from(
-    bytes,
-    (byte) =>
-      byte
-        .toString(16)
-        .padStart(2, "0")
-  ).join("");
-}
-
-
-/**
- * Convert a configured URL/origin into its canonical browser origin.
- */
-function normalizeOrigin(value) {
-  if (!value) {
-    return "";
-  }
-
-  try {
-    return new URL(
-      value,
-      globalThis.location.href
-    ).origin;
-  } catch {
-    return "";
   }
 }
 
@@ -210,10 +144,7 @@ export class RelayController {
 
     this._isLocalHost = false;
 
-    this._nonce = null;
-
     this._popupWindow = null;
-    this._popupCheckTimer = null;
 
     this._lastRejectedMessage = null;
 
@@ -229,9 +160,6 @@ export class RelayController {
 
     this._extensionChannelId =
       "";
-
-    this._boundMessageHandler =
-      this._onWindowMessage.bind(this);
 
     this._settingHookId = null;
 
@@ -488,19 +416,15 @@ export class RelayController {
       return;
     }
 
-    this._isLocalHost = true;
 
-    this._nonce =
-      generateNonce();
+    this._isLocalHost =
+      true;
 
-    globalThis.addEventListener(
-      "message",
-      this._boundMessageHandler
-    );
 
     socketService.setAuthoritative(
       true
     );
+
 
     debugLog(
       "Local GM became relay host."
@@ -518,34 +442,20 @@ export class RelayController {
       return;
     }
 
-    globalThis.removeEventListener(
-      "message",
-      this._boundMessageHandler
-    );
-
-    this._stopPopupMonitor();
 
     if (closePopup) {
-      try {
-        if (
-          this._popupWindow
-          && !this._popupWindow.closed
-        ) {
-          this._popupWindow.close();
-        }
-      } catch {
-        // Ignore browser popup-access failures during teardown.
-      }
+      this.closeRelayPopup();
     }
 
-    this._popupWindow = null;
 
     socketService.setAuthoritative(
       false
     );
 
-    this._nonce = null;
-    this._isLocalHost = false;
+
+    this._isLocalHost =
+      false;
+
 
     debugLog(
       "Local GM relinquished relay host."
@@ -553,42 +463,6 @@ export class RelayController {
   }
 
   // #endregion
-
-
-  // #region Nonce
-
-  /**
-   * Return the current session nonce.
-   *
-   * Primarily useful for diagnostics and future integration testing.
-   */
-  getNonce() {
-    return this._nonce;
-  }
-
-
-  /**
-   * Rotate the current relay nonce.
-   *
-   * Existing external relay messages immediately become invalid.
-   */
-  regenerateNonce() {
-    requireGM();
-
-    if (!this._isLocalHost) {
-      throw new Error(
-        `${LOG_PREFIX} Only the active relay host may regenerate the nonce.`
-      );
-    }
-
-    this._nonce =
-      generateNonce();
-
-    return this._nonce;
-  }
-
-  // #endregion
-
 
   // #region Popup Management
 
@@ -672,84 +546,28 @@ openRelayPopup() {
 
 
   /**
-   * Close the currently tracked relay popup.
+   * Best-effort close of the locally tracked
+   * StreamKit launcher window.
    */
-closeRelayPopup() {
-  this._stopPopupMonitor();
+  closeRelayPopup() {
+    try {
+      if (
+        this._popupWindow
+        && !this._popupWindow.closed
+      ) {
+        this._popupWindow.close();
+      }
 
-
-  try {
-    if (
-      this._popupWindow
-      && !this._popupWindow.closed
-    ) {
-      this._popupWindow.close();
+    } catch {
+      /*
+      * StreamKit/browser isolation may prevent
+      * cross-origin window cleanup.
+      */
     }
 
-  } catch {
-    // Cross-origin/COOP isolation may prevent cleanup.
-  }
 
-
-  this._popupWindow =
-    null;
-}
-
-
-  /**
-   * Poll the Window.closed state.
-   */
-  _startPopupMonitor() {
-    this._stopPopupMonitor();
-
-    this._popupCheckTimer =
-      globalThis.setInterval(
-        () => {
-          if (!this._popupWindow) {
-            return;
-          }
-
-          if (!this._popupWindow.closed) {
-            return;
-          }
-
-          this._stopPopupMonitor();
-
-          this._popupWindow = null;
-
-          if (
-            this._isLocalHost
-            && game.user?.isGM
-          ) {
-            relayState.setPopupOpen(
-              false
-            );
-
-            relayState.markDisconnected();
-          }
-
-          debugLog(
-            "Relay popup closed."
-          );
-        },
-        POPUP_CHECK_INTERVAL_MS
-      );
-  }
-
-
-  /**
-   * Stop popup-state polling.
-   */
-  _stopPopupMonitor() {
-    if (!this._popupCheckTimer) {
-      return;
-    }
-
-    globalThis.clearInterval(
-      this._popupCheckTimer
-    );
-
-    this._popupCheckTimer = null;
+    this._popupWindow =
+      null;
   }
 
   // #endregion
@@ -1080,20 +898,17 @@ receiveExtensionSpeakingEvent(
     validation.payload;
 
 
-  /*
-   * The extension never receives or supplies the
-   * Foundry relay nonce.
+  /**
+   * Receive one speaking event delivered by the
+   * Max Headroom Chromium companion extension.
    *
-   * Once its transport envelope has been validated,
-   * the authoritative GM controller creates the
-   * canonical protocol message itself using its
-   * private current-session nonce.
+   * The extension envelope is validated here, then
+   * converted into the module's canonical Discord
+   * speaking record and applied through the existing
+   * authoritative relay-state path.
    */
   const protocolPayload =
     makeDiscordSpeaking({
-      nonce:
-        this._nonce,
-
       discordUserId:
         extensionEvent.discordUserId,
 
@@ -1120,14 +935,12 @@ receiveExtensionSpeakingEvent(
 
 
   /*
-   * From this point onward there is no special
-   * extension code path.
-   *
-   * Mapping, normalization, authoritative state,
-   * unmapped-user diagnostics and sockets all use
-   * the existing relay implementation.
-   */
-  this._processRelayPayload(
+  * Extension ingress has already been validated.
+  *
+  * Enter the shared Discord-speaking processing
+  * path directly.
+  */
+  this._handleDiscordSpeaking(
     protocolPayload
   );
 
@@ -1507,272 +1320,40 @@ _validateExtensionSpeakingEvent(
 
 // #endregion
 
-  // #region postMessage Validation
+// #region Validation Diagnostics
 
-  /**
-   * Receive browser window messages.
-   */
-  _onWindowMessage(event) {
-    if (!this._isLocalHost) {
-      return;
-    }
-
-    const validation =
-      this._validateWindowMessage(
-        event
-      );
-
-    if (!validation.valid) {
-      this._recordRejectedMessage(
-        validation.reason,
-        event.data
-      );
-
-      return;
-    }
-
-    this._processRelayPayload(
-      validation.payload
-    );
-  }
-
-
-  /**
-   * Validate browser-level and protocol-level security requirements.
-   */
-  _validateWindowMessage(event) {
-    const expectedOrigin =
-      normalizeOrigin(
-        getSetting(
-          SETTING_KEYS.RELAY_ORIGIN
-        )
-      );
-
-    if (!expectedOrigin) {
-      return {
-        valid: false,
-        reason:
-          "Relay origin is not configured or is invalid."
-      };
-    }
-
-    if (
-      event.origin
-      !== expectedOrigin
-    ) {
-      return {
-        valid: false,
-        reason:
-          `Unexpected origin: ${event.origin}`
-      };
-    }
-
-    /*
-     * If we launched a popup, require the event to originate from exactly
-     * that Window object.
-     */
-    if (
-      this._popupWindow
-      && event.source
-        !== this._popupWindow
-    ) {
-      return {
-        valid: false,
-        reason:
-          "Message source is not the tracked relay popup."
-      };
-    }
-
-    const payload =
-      event.data;
-
-    if (
-      !payload
-      || typeof payload !== "object"
-    ) {
-      return {
-        valid: false,
-        reason:
-          "Payload is not an object."
-      };
-    }
-
-    if (
-      payload.version
-      !== PROTOCOL_VERSION
-    ) {
-      /*
-       * This is useful health information even though the packet itself
-       * must not be accepted.
-       */
-      relayState.markIncompatible(
-        payload.version
-      );
-
-      return {
-        valid: false,
-        reason:
-          `Protocol version ${String(payload.version)} is incompatible.`
-      };
-    }
-
-    if (
-      !ACCEPTED_RELAY_TYPES.has(
-        payload.type
-      )
-    ) {
-      return {
-        valid: false,
-        reason:
-          `Unrecognized relay message type: ${String(payload.type)}`
-      };
-    }
-
-    if (
-      payload.nonce
-      !== this._nonce
-    ) {
-      return {
-        valid: false,
-        reason:
-          "Relay nonce does not match the current session."
-      };
-    }
-
-    if (
-      payload.source
-      !== MESSAGE_SOURCES.STREAMKIT
-    ) {
-      return {
-        valid: false,
-        reason:
-          `Unexpected message source: ${String(payload.source)}`
-      };
-    }
-
-    if (
-      !isFreshTimestamp(
-        payload.timestamp
-      )
-    ) {
-      return {
-        valid: false,
-        reason:
-          "Relay message timestamp is stale or invalid."
-      };
-    }
-
-    return {
-      valid: true,
-      payload
-    };
-  }
-
-
-  /**
-   * Record a validation rejection for GM diagnostics.
-   */
+/**
+ * Record a validation rejection for GM diagnostics.
+ */
   _recordRejectedMessage(
     reason,
     payload
   ) {
     this._lastRejectedMessage = {
       reason,
+
       timestamp:
         nowTs(),
 
       type:
         payload?.type
+        ?? payload?.eventName
+        ?? payload?.state
         ?? null
     };
 
+
     debugLog(
-      "Rejected relay message:",
+      "Rejected extension relay message:",
       reason,
       payload
     );
   }
 
-  // #endregion
+// #endregion
 
 
-  // #region Relay Message Processing
-
-  /**
-   * Dispatch a validated relay payload.
-   */
-  _processRelayPayload(payload) {
-    debugLog(
-      "Accepted relay message:",
-      payload
-    );
-
-    switch (payload.type) {
-      case MESSAGE_TYPES.RELAY_READY:
-        this._handleRelayReady(
-          payload
-        );
-        break;
-
-      case MESSAGE_TYPES.RELAY_HEARTBEAT:
-        this._handleRelayHeartbeat(
-          payload
-        );
-        break;
-
-      case MESSAGE_TYPES.DISCORD_SPEAKING:
-        this._handleDiscordSpeaking(
-          payload
-        );
-        break;
-
-      case MESSAGE_TYPES.RELAY_ERROR:
-        this._handleRelayError(
-          payload
-        );
-        break;
-
-      case MESSAGE_TYPES.RELAY_DEBUG:
-        this._handleRelayDebug(
-          payload
-        );
-        break;
-
-      default:
-        break;
-    }
-  }
-
-
-  /**
-   * Handle StreamKit relay initialization.
-   */
-  _handleRelayReady(payload) {
-    relayState.markReady({
-      protocolVersion:
-        payload.version,
-
-      scriptVersion:
-        payload.scriptVersion
-    });
-  }
-
-
-  /**
-   * Handle relay heartbeat.
-   */
-  _handleRelayHeartbeat(payload) {
-    relayState.recordHeartbeat({
-      protocolVersion:
-        payload.version,
-
-      scriptVersion:
-        payload.scriptVersion,
-
-      timestamp:
-        payload.timestamp
-    });
-  }
+// #region Discord Speaking Processing
 
 
   /**
@@ -1841,45 +1422,18 @@ _validateExtensionSpeakingEvent(
     );
   }
 
-
-  /**
-   * Handle external relay error.
-   */
-  _handleRelayError(payload) {
-    const message =
-      payload.message
-      ?? payload.error
-      ?? "Unknown StreamKit relay error.";
-
-    relayState.markError(
-      String(message)
-    );
-  }
-
-
-  /**
-   * Handle optional relay debug information.
-   */
-  _handleRelayDebug(payload) {
-    debugLog(
-      "StreamKit debug:",
-      payload.message
-        ?? payload.data
-        ?? payload
-    );
-  }
-
   // #endregion
 
 
   // #region Diagnostics
 
-  /**
-   * Return controller runtime status for the future GM UI.
-   */
+/**
+ * Return Relay Controller runtime diagnostics.
+ */
   getStatus() {
     const host =
       this.getHostUser();
+
 
     return {
       initialized:
@@ -1901,12 +1455,6 @@ _validateExtensionSpeakingEvent(
           host?.active
         ),
 
-      popupOpen:
-        Boolean(
-          this._popupWindow
-          && !this._popupWindow.closed
-        ),
-
       transport:
         "chromium-extension",
 
@@ -1919,23 +1467,11 @@ _validateExtensionSpeakingEvent(
       lastExtensionHeartbeatAt:
         this._lastExtensionHeartbeatAt,
 
-      hasNonce:
-        Boolean(
-          this._nonce
-        ),
-
-      expectedOrigin:
-        normalizeOrigin(
-          getSetting(
-            SETTING_KEYS.RELAY_ORIGIN
-          )
-        ),
-
       extensionIngressCount:
-          this._extensionIngressCount,
+        this._extensionIngressCount,
 
       lastExtensionEventAt:
-          this._lastExtensionEventAt,
+        this._lastExtensionEventAt,
 
       lastRejectedMessage:
         this._lastRejectedMessage
@@ -1945,65 +1481,7 @@ _validateExtensionSpeakingEvent(
           : null
     };
   }
-
-    /**
-   * Inject a synthetic browser message through the normal Relay Controller
-   * window-message validation and processing path.
-   *
-   * Intended only for development/testing.
-   */
-  injectDebugWindowMessage(
-    payload,
-    {
-      origin,
-      invalidSource = false
-    } = {}
-  ) {
-    requireGM();
-
-    if (!this._isLocalHost) {
-      throw new Error(
-        `${LOG_PREFIX} Claim relay-host status before injecting debug relay messages.`
-      );
-    }
-
-    const expectedOrigin =
-      normalizeOrigin(
-        getSetting(
-          SETTING_KEYS.RELAY_ORIGIN
-        )
-      );
-
-    const syntheticEvent = {
-      data:
-        payload,
-
-      origin:
-        origin
-        ?? expectedOrigin,
-
-      /*
-      * When a real popup is open, normal debug events pretend to originate
-      * from that exact tracked Window object.
-      *
-      * invalidSource deliberately supplies a different object.
-      */
-      source:
-        invalidSource
-          ? {}
-          : (
-              this._popupWindow
-              ?? null
-            )
-    };
-
-    this._onWindowMessage(
-      syntheticEvent
-    );
-
-    return this.getStatus();
-  }
-
+  
   // #endregion
 }
 

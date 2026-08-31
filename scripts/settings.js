@@ -36,9 +36,7 @@ export const SETTING_KEYS = Object.freeze({
 
   STALE_SPEAKER_TIMEOUT_MS: "staleSpeakerTimeoutMs",
 
-  RELAY_ORIGIN: "relayOrigin",
   STREAMKIT_URL: "streamkitUrl",
-  RELAY_HEARTBEAT_TIMEOUT_MS: "relayHeartbeatTimeoutMs",
   RELAY_HOST_USER_ID: "relayHostUserId",
 
   DEBUG_MODE: "debugMode"
@@ -284,19 +282,6 @@ game.settings.register(
 
   game.settings.register(
     MODULE_ID,
-    SETTING_KEYS.RELAY_ORIGIN,
-    {
-      name: "StreamKit Relay Origin",
-      hint: "Expected browser origin for messages from the external Discord StreamKit relay.",
-      scope: "world",
-      config: false,
-      type: String,
-      default: "https://streamkit.discord.com"
-    }
-  );
-
-  game.settings.register(
-    MODULE_ID,
     SETTING_KEYS.STREAMKIT_URL,
     {
       name:
@@ -310,24 +295,6 @@ game.settings.register(
       default: "https://streamkit.discord.com/overlay"
     }
   );
-
-game.settings.register(
-  MODULE_ID,
-  SETTING_KEYS.RELAY_HEARTBEAT_TIMEOUT_MS,
-  {
-    name: "Relay Heartbeat Timeout",
-    hint: "Milliseconds without a valid heartbeat before the StreamKit relay is considered stale.",
-    scope: "world",
-    config: false,
-    type: Number,
-    range: {
-      min: 5000,
-      max: 120000,
-      step: 1000
-    },
-    default: 15000
-  }
-);
 
 game.settings.register(
   MODULE_ID,

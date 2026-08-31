@@ -3,6 +3,7 @@
 // #region Imports
 
 import {
+  MODULE_ID,
   PROTOCOL_VERSION,
   MESSAGE_SOURCES,
   nowTs,

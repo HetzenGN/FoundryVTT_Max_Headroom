@@ -37,6 +37,15 @@
 
 
       <div class="max-headroom-relay-controller__status-label">
+        Transport
+      </div>
+
+      <div class="max-headroom-relay-controller__status-value">
+        {{relayTransport}}
+      </div>
+
+
+      <div class="max-headroom-relay-controller__status-label">
         Protocol
       </div>
 
@@ -46,13 +55,17 @@
 
 
       <div class="max-headroom-relay-controller__status-label">
-        Relay Script
+        Companion Version
       </div>
 
       <div class="max-headroom-relay-controller__status-value">
-        {{relayScriptVersion}}
+        {{companionVersion}}
       </div>
 
+
+      <div class="max-headroom-relay-controller__status-label">
+        Last Heartbeat
+      </div>
 
       <div
         class="max-headroom-relay-controller__status-value"
@@ -62,10 +75,10 @@
         {{heartbeatAge}}
       </div>
 
-      <div class="max-headroom-relay-controller__status-value">
-        {{heartbeatAge}}
-      </div>
 
+      <div class="max-headroom-relay-controller__status-label">
+        Last Discord Event
+      </div>
 
       <div
         class="max-headroom-relay-controller__status-value"
@@ -75,21 +88,13 @@
         {{discordEventAge}}
       </div>
 
-      <div class="max-headroom-relay-controller__status-value">
-        {{discordEventAge}}
-      </div>
-
 
       <div class="max-headroom-relay-controller__status-label">
-        Relay Window
+        StreamKit Channel
       </div>
 
       <div class="max-headroom-relay-controller__status-value">
-        {{#if popupOpen}}
-          Open
-        {{else}}
-          Closed
-        {{/if}}
+        {{streamKitChannelId}}
       </div>
 
     </div>
@@ -164,11 +169,7 @@
         >
           <i class="fa-solid fa-up-right-from-square"></i>
 
-          {{#if popupOpen}}
-            Reopen StreamKit
-          {{else}}
-            Open StreamKit
-          {{/if}}
+          Open StreamKit
         </button>
 
         <button

@@ -167,6 +167,24 @@ function requireGM() {
   }
 }
 
+function normalizeHeartbeatTimeout(
+  value
+) {
+  const number =
+    Number(value);
+
+
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+
+
+  return Math.max(
+    1000,
+    number
+  );
+}
+
 // #endregion
 
 
@@ -202,6 +220,8 @@ export class RelayStateStore {
 
     this._relayProtocolVersion = null;
     this._relayScriptVersion = null;
+    this._heartbeatTimeoutOverrideMs =
+      null;
 
     this._popupOpen = false;
 
@@ -259,6 +279,10 @@ export class RelayStateStore {
       lastHeartbeat:
         this._lastHeartbeat,
 
+      heartbeatTimeoutMs:
+        this._heartbeatTimeoutOverrideMs
+        ?? getRelayHeartbeatTimeoutMs(),
+
       lastValidDiscordEvent:
         this._lastValidDiscordEvent,
 
@@ -297,22 +321,34 @@ export class RelayStateStore {
    */
   markReady({
     protocolVersion = PROTOCOL_VERSION,
-    scriptVersion
+    scriptVersion,
+    heartbeatTimeoutMs
   } = {}) {
     requireGM();
 
+
     this._relayProtocolVersion =
       protocolVersion;
+
 
     this._relayScriptVersion =
       scriptVersion
       ?? this._relayScriptVersion;
 
+
+    this._heartbeatTimeoutOverrideMs =
+      normalizeHeartbeatTimeout(
+        heartbeatTimeoutMs
+      );
+
+
     this._lastHeartbeat =
       nowTs();
 
+
     this._lastError =
       null;
+
 
     if (
       protocolVersion
@@ -325,9 +361,11 @@ export class RelayStateStore {
       return this.getRelayHealth();
     }
 
+
     this._setRelayStatus(
       RELAY_STATUS.CONNECTED
     );
+
 
     return this.getRelayHealth();
   }
@@ -338,20 +376,36 @@ export class RelayStateStore {
   recordHeartbeat({
     protocolVersion = PROTOCOL_VERSION,
     scriptVersion,
-    timestamp = nowTs()
+    timestamp = nowTs(),
+    heartbeatTimeoutMs
   } = {}) {
     requireGM();
 
+
     this._relayProtocolVersion =
       protocolVersion;
+
 
     this._relayScriptVersion =
       scriptVersion
       ?? this._relayScriptVersion;
 
+
+    if (
+      heartbeatTimeoutMs
+      !== undefined
+    ) {
+      this._heartbeatTimeoutOverrideMs =
+        normalizeHeartbeatTimeout(
+          heartbeatTimeoutMs
+        );
+    }
+
+
     this._lastHeartbeat =
       Number(timestamp)
       || nowTs();
+
 
     if (
       protocolVersion
@@ -364,12 +418,15 @@ export class RelayStateStore {
       return this.getRelayHealth();
     }
 
+
     this._lastError =
       null;
+
 
     this._setRelayStatus(
       RELAY_STATUS.CONNECTED
     );
+
 
     return this.getRelayHealth();
   }
@@ -384,6 +441,9 @@ export class RelayStateStore {
     requireGM();
 
     this._popupOpen = false;
+
+    this._heartbeatTimeoutOverrideMs =
+      null;
 
     this._setRelayStatus(
       RELAY_STATUS.DISCONNECTED
@@ -882,7 +942,8 @@ export class RelayStateStore {
     }
 
     const timeout =
-      getRelayHeartbeatTimeoutMs();
+      this._heartbeatTimeoutOverrideMs
+      ?? getRelayHeartbeatTimeoutMs();
 
     if (
       currentTime

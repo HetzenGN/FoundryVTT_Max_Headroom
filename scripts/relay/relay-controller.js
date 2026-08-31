@@ -60,6 +60,8 @@ const POPUP_CHECK_INTERVAL_MS = 1000;
 const MAX_MESSAGE_AGE_MS = 60000;
 const MAX_FUTURE_SKEW_MS = 5000;
 
+const EXTENSION_HEARTBEAT_TIMEOUT_MS = 90000;
+
 /**
  * Query-string fields supplied to the external StreamKit relay.
  *
@@ -218,6 +220,15 @@ export class RelayController {
     this._extensionIngressCount = 0;
 
     this._lastExtensionEventAt = null;
+
+    this._lastExtensionHeartbeatAt =
+      null;
+
+    this._extensionVersion =
+      "";
+
+    this._extensionChannelId =
+      "";
 
     this._boundMessageHandler =
       this._onWindowMessage.bind(this);
@@ -581,125 +592,108 @@ export class RelayController {
 
   // #region Popup Management
 
-  /**
-   * Open or reopen the external StreamKit relay page.
-   */
-  openRelayPopup() {
-    requireGM();
+/**
+ * Open the configured Discord StreamKit Voice page.
+ *
+ * The Chromium companion extension now owns relay
+ * transport and health. This window is only a
+ * convenient StreamKit launcher.
+ */
+openRelayPopup() {
+  requireGM();
 
-    if (!this._isLocalHost) {
-      throw new Error(
-        `${LOG_PREFIX} Claim relay-host status before opening StreamKit.`
-      );
-    }
 
-    /*
-     * Each popup launch represents a new relay browser session.
-     */
-    this.regenerateNonce();
-
-    const configuredUrl =
-      String(
-        getSetting(
-          SETTING_KEYS.STREAMKIT_URL
-        )
-        ?? ""
-      ).trim();
-
-    if (!configuredUrl) {
-      throw new Error(
-        `${LOG_PREFIX} StreamKit Relay URL is not configured.`
-      );
-    }
-
-    let url;
-
-    try {
-      url =
-        new URL(
-          configuredUrl,
-          globalThis.location.href
-        );
-    } catch {
-      throw new Error(
-        `${LOG_PREFIX} StreamKit Relay URL is invalid.`
-      );
-    }
-
-    url.searchParams.set(
-      RELAY_QUERY_KEYS.NONCE,
-      this._nonce
+  if (!this._isLocalHost) {
+    throw new Error(
+      `${LOG_PREFIX} Claim relay-host status before opening StreamKit.`
     );
-
-    url.searchParams.set(
-      RELAY_QUERY_KEYS.PROTOCOL,
-      String(PROTOCOL_VERSION)
-    );
-
-    url.searchParams.set(
-      RELAY_QUERY_KEYS.OPENER_ORIGIN,
-      globalThis.location.origin
-    );
-
-    relayState.markConnecting();
-
-    this._popupWindow =
-      globalThis.open(
-        url.toString(),
-        RELAY_POPUP_NAME,
-        RELAY_POPUP_FEATURES
-      );
-
-    if (!this._popupWindow) {
-      relayState.markError(
-        "StreamKit popup was blocked by the browser."
-      );
-
-      throw new Error(
-        `${LOG_PREFIX} StreamKit popup was blocked by the browser.`
-      );
-    }
-
-    relayState.setPopupOpen(
-      true
-    );
-
-    this._startPopupMonitor();
-
-    return true;
   }
+
+
+  const configuredUrl =
+    String(
+      getSetting(
+        SETTING_KEYS.STREAMKIT_URL
+      )
+      ?? ""
+    ).trim();
+
+
+  if (!configuredUrl) {
+    throw new Error(
+      `${LOG_PREFIX} StreamKit Relay URL is not configured.`
+    );
+  }
+
+
+  let url;
+
+
+  try {
+    url =
+      new URL(
+        configuredUrl,
+        globalThis.location.href
+      );
+
+  } catch {
+    throw new Error(
+      `${LOG_PREFIX} StreamKit Relay URL is invalid.`
+    );
+  }
+
+
+  const popupWindow =
+    globalThis.open(
+      url.toString(),
+      RELAY_POPUP_NAME,
+      RELAY_POPUP_FEATURES
+    );
+
+
+  if (!popupWindow) {
+    throw new Error(
+      `${LOG_PREFIX} StreamKit window was blocked by the browser.`
+    );
+  }
+
+
+  /*
+   * Retain the reference only for best-effort local
+   * cleanup. StreamKit/browser isolation may sever
+   * the relationship, so it is not relay health.
+   */
+  this._popupWindow =
+    popupWindow;
+
+
+  return true;
+}
 
 
   /**
    * Close the currently tracked relay popup.
    */
-  closeRelayPopup() {
-    this._stopPopupMonitor();
+closeRelayPopup() {
+  this._stopPopupMonitor();
 
-    try {
-      if (
-        this._popupWindow
-        && !this._popupWindow.closed
-      ) {
-        this._popupWindow.close();
-      }
-    } catch {
-      // Ignore browser cross-window cleanup failures.
-    }
 
-    this._popupWindow = null;
-
+  try {
     if (
-      this._isLocalHost
-      && game.user?.isGM
+      this._popupWindow
+      && !this._popupWindow.closed
     ) {
-      relayState.setPopupOpen(
-        false
-      );
-
-      relayState.markDisconnected();
+      this._popupWindow.close();
     }
+
+  } catch {
+    // Cross-origin/COOP isolation may prevent cleanup.
   }
+
+
+  this._popupWindow =
+    null;
+}
 
 
   /**
@@ -761,6 +755,273 @@ export class RelayController {
   // #endregion
 
   // #region Extension Ingress
+
+/**
+ * Receive companion-extension connection health.
+ */
+receiveExtensionRelayHealth(
+  rawPayload
+) {
+  if (
+    !game.user?.isGM
+    || !this._isLocalHost
+  ) {
+    return {
+      ok: false,
+      error:
+        "not-relay-host"
+    };
+  }
+
+
+  const validation =
+    this._validateExtensionRelayHealth(
+      rawPayload
+    );
+
+
+  if (!validation.valid) {
+    this._recordRejectedMessage(
+      `Extension health ingress: ${validation.reason}`,
+      rawPayload
+    );
+
+
+    return {
+      ok: false,
+
+      error:
+        "invalid-extension-health",
+
+      reason:
+        validation.reason
+    };
+  }
+
+
+  const health =
+    validation.payload;
+
+
+  this._extensionVersion =
+    health.extensionVersion;
+
+  this._extensionChannelId =
+    health.channelId;
+
+  this._lastExtensionHeartbeatAt =
+    nowTs();
+
+
+  const scriptVersion =
+    `Chromium Extension ${health.extensionVersion}`;
+
+
+  switch (health.state) {
+    case "ready":
+      relayState.markReady({
+        protocolVersion:
+          PROTOCOL_VERSION,
+
+        scriptVersion,
+
+        heartbeatTimeoutMs:
+          EXTENSION_HEARTBEAT_TIMEOUT_MS
+      });
+
+      break;
+
+
+    case "heartbeat":
+      relayState.recordHeartbeat({
+        protocolVersion:
+          PROTOCOL_VERSION,
+
+        scriptVersion,
+
+        timestamp:
+          health.observedAt,
+
+        heartbeatTimeoutMs:
+          EXTENSION_HEARTBEAT_TIMEOUT_MS
+      });
+
+      break;
+
+
+    case "disconnected":
+      relayState.resetSpeakingStates(
+        "extension-disconnected"
+      );
+
+      socketService
+        .broadcastResetSpeaking();
+
+      relayState.markDisconnected();
+
+      break;
+
+
+    default:
+      break;
+  }
+
+
+  return {
+    ok: true,
+
+    state:
+      health.state,
+
+    extensionVersion:
+      health.extensionVersion,
+
+    channelId:
+      health.channelId
+  };
+}
+
+
+/**
+ * Validate extension relay-health metadata.
+ */
+_validateExtensionRelayHealth(
+  payload
+) {
+  if (
+    !payload
+    || typeof payload !== "object"
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension health payload is not an object."
+    };
+  }
+
+
+  const acceptedStates =
+    new Set([
+      "ready",
+      "heartbeat",
+      "disconnected"
+    ]);
+
+
+  if (
+    !acceptedStates.has(
+      payload.state
+    )
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension health payload has an invalid state."
+    };
+  }
+
+
+  const channelId =
+    typeof payload.channelId
+      === "string"
+      ? payload.channelId.trim()
+      : "";
+
+
+  if (
+    !/^\d+$/.test(
+      channelId
+    )
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension health payload has an invalid Discord channel ID."
+    };
+  }
+
+
+  const extensionVersion =
+    typeof payload.extensionVersion
+      === "string"
+      ? payload.extensionVersion.trim()
+      : "";
+
+
+  if (
+    !extensionVersion
+    || extensionVersion.length > 32
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension health payload has an invalid extension version."
+    };
+  }
+
+
+  const observedAt =
+    Number(
+      payload.observedAt
+    );
+
+
+  if (
+    !isFreshTimestamp(
+      observedAt
+    )
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension health timestamp is stale or invalid."
+    };
+  }
+
+
+  return {
+    valid: true,
+
+    payload: {
+      state:
+        payload.state,
+
+      channelId,
+
+      extensionVersion,
+
+      observedAt
+    }
+  };
+}
+
+
+/**
+ * Count any valid extension traffic as evidence
+ * that the companion transport is currently alive.
+ */
+_recordExtensionActivity(
+  timestamp = nowTs()
+) {
+  this._lastExtensionEventAt =
+    nowTs();
+
+
+  relayState.recordHeartbeat({
+    protocolVersion:
+      PROTOCOL_VERSION,
+
+    scriptVersion:
+      this._extensionVersion
+        ? `Chromium Extension ${this._extensionVersion}`
+        : "Chromium Extension",
+
+    timestamp,
+
+    heartbeatTimeoutMs:
+      EXTENSION_HEARTBEAT_TIMEOUT_MS
+  });
+}
 
 /**
  * Receive one speaking event delivered by the
@@ -852,8 +1113,10 @@ receiveExtensionSpeakingEvent(
 
   this._extensionIngressCount += 1;
 
-  this._lastExtensionEventAt =
-    nowTs();
+
+  this._recordExtensionActivity(
+    extensionEvent.observedAt
+  );
 
 
   /*
@@ -925,6 +1188,9 @@ receiveExtensionDiscordUserEvent(
     };
   }
 
+  this._recordExtensionActivity(
+    validation.payload.observedAt
+  );
 
   const entry =
     discordUserDirectory.record(
@@ -1640,6 +1906,18 @@ _validateExtensionSpeakingEvent(
           this._popupWindow
           && !this._popupWindow.closed
         ),
+
+      transport:
+        "chromium-extension",
+
+      extensionVersion:
+        this._extensionVersion,
+
+      extensionChannelId:
+        this._extensionChannelId,
+
+      lastExtensionHeartbeatAt:
+        this._lastExtensionHeartbeatAt,
 
       hasNonce:
         Boolean(

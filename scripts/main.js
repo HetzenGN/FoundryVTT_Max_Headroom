@@ -78,6 +78,15 @@ const moduleApi = {
    * extension transport envelope, not RelayState
    * mutation APIs.
    */
+  receiveExtensionRelayHealth(
+    payload
+  ) {
+    return relayController
+      .receiveExtensionRelayHealth(
+        payload
+      );
+  },
+
   receiveExtensionSpeakingEvent(
     payload
   ) {

@@ -23,6 +23,13 @@
   const EXTENSION_USER_TYPE =
     "MAX_HEADROOM_STREAMKIT_USER";
 
+  const EXTENSION_HEALTH_TYPE =
+  "MAX_HEADROOM_STREAMKIT_HEALTH";
+
+
+  const HEALTH_HEARTBEAT_INTERVAL_MS =
+    5000;
+
   const USER_EVENTS =
     new Set([
       "VOICE_STATE_CREATE",
@@ -153,6 +160,87 @@
 
   // #endregion
 
+  // #region Health
+
+function getStreamKitChannelId() {
+  const match =
+    globalThis.location.pathname
+      .match(
+        /^\/overlay\/voice\/[^/]+\/([^/]+)/
+      );
+
+
+  const channelId =
+    String(
+      match?.[1]
+      ?? ""
+    ).trim();
+
+
+  return /^\d+$/.test(
+    channelId
+  )
+    ? channelId
+    : "";
+}
+
+
+function sendHealth(
+  state
+) {
+  const channelId =
+    getStreamKitChannelId();
+
+
+  if (!channelId) {
+    return;
+  }
+
+
+  sendToExtension(
+    EXTENSION_HEALTH_TYPE,
+    {
+      state,
+
+      channelId,
+
+      observedAt:
+        Date.now()
+    }
+  );
+}
+
+
+let healthHeartbeatTimer =
+  globalThis.setInterval(
+    () => {
+      sendHealth(
+        "heartbeat"
+      );
+    },
+    HEALTH_HEARTBEAT_INTERVAL_MS
+  );
+
+
+function stopHealthHeartbeat() {
+  if (
+    healthHeartbeatTimer === null
+  ) {
+    return;
+  }
+
+
+  globalThis.clearInterval(
+    healthHeartbeatTimer
+  );
+
+
+  healthHeartbeatTimer =
+    null;
+}
+
+
+// #endregion
 
   // #region Page Bridge
 
@@ -230,12 +318,32 @@
   // #endregion
 
 
-  // #region Startup
+// #region Startup
 
-  console.info(
-    LOG_PREFIX,
-    "StreamKit extension bridge installed."
-  );
+sendHealth(
+  "ready"
+);
 
-  // #endregion
+
+globalThis.addEventListener(
+  "pagehide",
+  () => {
+    stopHealthHeartbeat();
+
+    sendHealth(
+      "disconnected"
+    );
+  },
+  {
+    once: true
+  }
+);
+
+
+console.info(
+  LOG_PREFIX,
+  "StreamKit extension bridge installed."
+);
+
+// #endregion
 })();

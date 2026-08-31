@@ -2,7 +2,7 @@
   "id": "foundryvtt-max-headroom",
   "title": "FoundryVTT_Max_Headroom",
   "description": "A Foundry VTT v14 module providing GM-hosted Discord StreamKit relay integration and reactive user portrait overlays.",
-  "version": "0.2.5",
+  "version": "0.2.6",
 
   "authors": [
     {

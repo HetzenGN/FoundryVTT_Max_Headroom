@@ -355,13 +355,16 @@ export class RelayControllerApp extends HandlebarsApplicationMixin(
       relayStatus:
         health.status,
 
+      relayTransport:
+        "Chromium Extension",
+
       protocolVersion:
         health.relayProtocolVersion
         ?? "—",
 
-      relayScriptVersion:
-        health.relayScriptVersion
-        ?? "—",
+      companionVersion:
+        controller.extensionVersion
+        || "—",
 
       heartbeatTimestamp:
         health.lastHeartbeat,
@@ -379,10 +382,9 @@ export class RelayControllerApp extends HandlebarsApplicationMixin(
           health.lastValidDiscordEvent
         ),
 
-      popupOpen:
-        Boolean(
-          health.popupOpen
-        ),
+      streamKitChannelId:
+        controller.extensionChannelId
+        || "—",
 
       lastError:
         health.lastError
@@ -638,7 +640,7 @@ export class RelayControllerApp extends HandlebarsApplicationMixin(
       relayController.openRelayPopup();
 
       ui.notifications.info(
-        "StreamKit relay window opened."
+        "StreamKit window opened. The Chromium relay extension will connect automatically."
       );
 
       this._queueRefresh();

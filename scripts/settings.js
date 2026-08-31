@@ -289,7 +289,7 @@ game.settings.register(
       name: "StreamKit Relay Origin",
       hint: "Expected browser origin for messages from the external Discord StreamKit relay.",
       scope: "world",
-      config: true,
+      config: false,
       type: String,
       default: "https://streamkit.discord.com"
     }
@@ -299,8 +299,11 @@ game.settings.register(
     MODULE_ID,
     SETTING_KEYS.STREAMKIT_URL,
     {
-      name: "StreamKit Relay URL",
-      hint: "URL opened by the GM Relay Controller when launching the external StreamKit relay.",
+      name:
+        "Discord StreamKit Voice URL",
+
+      hint:
+        "Discord StreamKit Voice overlay URL opened by the Relay Controller. The Max Headroom Chromium extension observes this page and relays Discord voice activity into Foundry.",
       scope: "world",
       config: true,
       type: String,
@@ -315,7 +318,7 @@ game.settings.register(
     name: "Relay Heartbeat Timeout",
     hint: "Milliseconds without a valid heartbeat before the StreamKit relay is considered stale.",
     scope: "world",
-    config: true,
+    config: false,
     type: Number,
     range: {
       min: 5000,

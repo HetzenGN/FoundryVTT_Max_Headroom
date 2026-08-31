@@ -23,6 +23,15 @@ const STREAMKIT_PATH_PREFIX =
 const LOG_PREFIX =
   "[Max Headroom extension]";
 
+const STREAMKIT_HEALTH_MESSAGE_TYPE =
+  "MAX_HEADROOM_STREAMKIT_HEALTH";
+
+
+const EXTENSION_VERSION =
+  chrome.runtime
+    .getManifest()
+    .version;
+
 // #endregion
 
 
@@ -214,6 +223,38 @@ function isValidDiscordUserPayload(
   );
 }
 
+function isValidRelayHealthPayload(
+  payload
+) {
+  return Boolean(
+    payload
+    && typeof payload
+      === "object"
+
+    && (
+      payload.state
+        === "ready"
+
+      || payload.state
+        === "heartbeat"
+
+      || payload.state
+        === "disconnected"
+    )
+
+    && typeof payload.channelId
+      === "string"
+
+    && /^\d+$/.test(
+      payload.channelId
+    )
+
+    && Number.isFinite(
+      payload.observedAt
+    )
+  );
+}
+
 // #endregion
 
 
@@ -266,6 +307,12 @@ async function inspectFoundryTab(
                 typeof module
                   ?.api
                   ?.receiveExtensionDiscordUserEvent
+                  === "function",
+
+              relayHealthIngressAvailable:
+                typeof module
+                  ?.api
+                  ?.receiveExtensionRelayHealth
                   === "function",
 
               href:
@@ -338,6 +385,7 @@ if (
   || !inspection.moduleActive
   || !inspection.ingressAvailable
   || !inspection.userDirectoryIngressAvailable
+  || !inspection.relayHealthIngressAvailable
 ) {
     console.warn(
       LOG_PREFIX,
@@ -756,6 +804,103 @@ async function routeDiscordUserEvent(
 
 // #endregion
 
+// #region Relay Health Routing
+
+async function routeRelayHealth(
+  message,
+  sender
+) {
+  const senderUrl =
+    sender?.url
+    ?? sender?.tab?.url
+    ?? "";
+
+
+  if (
+    !isStreamKitUrl(
+      senderUrl
+    )
+  ) {
+    return {
+      ok: false,
+      error:
+        "invalid-streamkit-sender"
+    };
+  }
+
+
+  const senderChannelId =
+    getStreamKitChannelId(
+      senderUrl
+    );
+
+
+  if (!senderChannelId) {
+    return {
+      ok: false,
+      error:
+        "streamkit-channel-unavailable"
+    };
+  }
+
+
+  if (
+    !isValidRelayHealthPayload(
+      message.payload
+    )
+  ) {
+    return {
+      ok: false,
+      error:
+        "invalid-relay-health-payload"
+    };
+  }
+
+
+  if (
+    message.payload.channelId
+    !== senderChannelId
+  ) {
+    return {
+      ok: false,
+      error:
+        "streamkit-channel-mismatch"
+    };
+  }
+
+
+  const paired =
+    await getPairedFoundryTab();
+
+
+  if (
+    !paired
+    || !Number.isInteger(
+      paired.tabId
+    )
+  ) {
+    return {
+      ok: false,
+      error:
+        "no-paired-foundry-tab"
+    };
+  }
+
+
+  return deliverToFoundry(
+    paired.tabId,
+    "receiveExtensionRelayHealth",
+    {
+      ...message.payload,
+
+      extensionVersion:
+        EXTENSION_VERSION
+    }
+  );
+}
+
+// #endregion
+
 // #region Runtime Messages
 
 chrome.runtime
@@ -797,6 +942,16 @@ chrome.runtime
           );
       }
 
+      if (
+        message.type
+          === STREAMKIT_HEALTH_MESSAGE_TYPE
+      ) {
+        operation =
+          routeRelayHealth(
+            message,
+            sender
+          );
+      }
 
       if (!operation) {
         return;

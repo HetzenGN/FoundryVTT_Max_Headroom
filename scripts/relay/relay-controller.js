@@ -5,7 +5,6 @@
 import {
   MODULE_ID,
   PROTOCOL_VERSION,
-  MESSAGE_SOURCES,
   nowTs,
   makeDiscordSpeaking,
   isDiscordSpeakingMessage,
@@ -846,15 +845,10 @@ _recordExtensionActivity(
  * Receive one speaking event delivered by the
  * Max Headroom Chromium companion extension.
  *
- * The extension transport does NOT enter through
- * _validateWindowMessage(). That validator belongs
- * specifically to the legacy popup/postMessage
- * transport and remains unchanged.
- *
- * Once the extension-specific envelope is validated,
- * it is converted into the normal shared-protocol
- * DISCORD_SPEAKING message and enters the existing
- * relay processing path.
+ * The extension envelope is validated here,
+ * converted into the module's normalized internal
+ * speaking record, then applied through the
+ * authoritative relay-state path.
  */
 receiveExtensionSpeakingEvent(
   rawPayload
@@ -920,10 +914,7 @@ receiveExtensionSpeakingEvent(
         extensionEvent.channelId,
 
       timestamp:
-        extensionEvent.observedAt,
-
-      source:
-        MESSAGE_SOURCES.STREAMKIT
+        extensionEvent.observedAt
     });
 
 

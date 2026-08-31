@@ -3,7 +3,6 @@
 // #region Imports
 
 import {
-  MODULE_ID,
   PROTOCOL_VERSION,
   nowTs
 } from "../../shared/protocol.js";

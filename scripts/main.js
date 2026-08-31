@@ -59,8 +59,8 @@ const LOG_PREFIX = "[FoundryVTT_Max_Headroom]";
 /**
  * Public module API.
  *
- * Additional relay and synchronization methods will be added here
- * as those components are implemented.
+ * Provides the companion-extension ingress surface,
+ * GM diagnostics, and portrait debugging utilities.
  *
  * Access through:
  *

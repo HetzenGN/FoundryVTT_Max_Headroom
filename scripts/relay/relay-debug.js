@@ -3,14 +3,8 @@
 // #region Imports
 
 import {
-  MODULE_ID,
   PROTOCOL_VERSION,
-  MESSAGE_TYPES,
-  MESSAGE_SOURCES,
-  nowTs,
-  makeRelayReady,
-  makeRelayHeartbeat,
-  makeDiscordSpeaking
+  nowTs
 } from "../../shared/protocol.js";
 
 import {
@@ -46,24 +40,30 @@ import {
 const LOG_PREFIX =
   "[FoundryVTT_Max_Headroom]";
 
-const DEBUG_SCRIPT_VERSION =
-  "internal-debug";
+const DEBUG_EXTENSION_VERSION =
+  "0.2.72-debug";
+
+const DEBUG_CHANNEL_ID =
+  "999999999999999998";
+
+const DEBUG_GUILD_ID =
+  "999999999999999997";
+
+const DEBUG_UNMAPPED_USER_ID =
+  "999999999999999999";
 
 // #endregion
 
 
 // #region Internal Helpers
 
-/**
- * Relay integration tests require the current browser to be the
- * authoritative GM relay host.
- */
 function requireLocalRelayHost() {
   if (!game.user?.isGM) {
     throw new Error(
       `${LOG_PREFIX} Relay debug tools are GM-only.`
     );
   }
+
 
   if (
     !relayController.isLocalHost()
@@ -76,28 +76,8 @@ function requireLocalRelayHost() {
 
 
 /**
- * Return the current relay session nonce.
- */
-function getNonce() {
-  const nonce =
-    relayController.getNonce();
-
-  if (!nonce) {
-    throw new Error(
-      `${LOG_PREFIX} The active relay host has no session nonce.`
-    );
-  }
-
-  return nonce;
-}
-
-
-/**
- * Resolve a Foundry User from:
- *
- * - User document
- * - User ID
- * - exact User name
+ * Resolve a Foundry User by document, ID,
+ * or exact case-insensitive name.
  */
 function resolveFoundryUser(
   userReference
@@ -106,52 +86,65 @@ function resolveFoundryUser(
     return null;
   }
 
+
   if (
-    typeof userReference === "object"
+    typeof userReference
+      === "object"
+
     && userReference.id
+
     && typeof userReference.getFlag
       === "function"
   ) {
     return userReference;
   }
 
+
   const value =
     String(
       userReference
     ).trim();
 
+
   if (!value) {
     return null;
   }
 
+
   const byId =
-    game.users.get(value);
+    game.users.get(
+      value
+    );
+
 
   if (byId) {
     return byId;
   }
 
+
   const lowered =
     value.toLowerCase();
+
 
   return (
     game.users.find(
       (user) =>
-        String(user.name ?? "")
+        String(
+          user.name
+          ?? ""
+        )
           .toLowerCase()
         === lowered
     )
+
     ?? null
   );
 }
 
 
 /**
- * Resolve a useful test reference into a Discord User ID.
- *
- * A direct numeric/string Discord ID may be supplied.
- *
- * A configured Foundry User ID/name/document may also be supplied.
+ * Resolve either a configured Foundry User or
+ * a direct Discord snowflake.
  */
 function resolveDiscordUserId(
   reference
@@ -161,25 +154,35 @@ function resolveDiscordUserId(
       reference
     );
 
+
   if (user) {
     const config =
       getReactivePortraitConfig(
         user
       );
 
-    if (!config.discordUserId) {
+
+    if (
+      !config.discordUserId
+    ) {
       throw new Error(
         `${LOG_PREFIX} Foundry User "${user.name}" has no configured Discord User ID.`
       );
     }
 
-    return config.discordUserId;
+
+    return String(
+      config.discordUserId
+    );
   }
+
 
   const value =
     String(
-      reference ?? ""
+      reference
+      ?? ""
     ).trim();
+
 
   if (!value) {
     throw new Error(
@@ -187,27 +190,33 @@ function resolveDiscordUserId(
     );
   }
 
+
   return value;
 }
 
 
 /**
- * Inject one normal synthetic StreamKit message.
+ * Prefer the actual currently-known StreamKit
+ * channel so debug events resemble live events.
  */
-function inject(payload) {
-  requireLocalRelayHost();
+function getDebugChannelId() {
+  const channelId =
+    String(
+      relayController
+        .getStatus()
+        .extensionChannelId
+      ?? ""
+    ).trim();
 
-  return relayController
-    .injectDebugWindowMessage(
-      payload
-    );
+
+  return /^\d+$/.test(
+    channelId
+  )
+    ? channelId
+    : DEBUG_CHANNEL_ID;
 }
 
 
-/**
- * Read current authoritative state when constructing partial simulated
- * updates such as mute/deafen changes.
- */
 function getCurrentDiscordState(
   discordUserId
 ) {
@@ -215,217 +224,196 @@ function getCurrentDiscordState(
     relayState.getSpeakingState(
       discordUserId
     )
+
     ?? {
       discordUserId,
-      speaking: false,
-      muted: false,
-      deafened: false
+      speaking:
+        false
     }
+  );
+}
+
+
+function getLastRejectedMessage() {
+  return (
+    relayController
+      .getStatus()
+      .lastRejectedMessage
+    ?? null
   );
 }
 
 // #endregion
 
 
-// #region Relay Lifecycle Simulation
+// #region Extension Health Simulation
 
 /**
- * Simulate the external relay announcing that it is ready.
+ * Simulate a valid extension READY event.
  */
 export function simulateRelayReady({
-  scriptVersion =
-    DEBUG_SCRIPT_VERSION
+  extensionVersion =
+    DEBUG_EXTENSION_VERSION,
+
+  channelId =
+    getDebugChannelId()
 } = {}) {
-  const payload =
-    makeRelayReady({
-      nonce:
-        getNonce(),
+  requireLocalRelayHost();
 
-      source:
-        MESSAGE_SOURCES.STREAMKIT,
 
-      timestamp:
+  relayController
+    .receiveExtensionRelayHealth({
+      state:
+        "ready",
+
+      channelId:
+        String(channelId),
+
+      extensionVersion:
+        String(extensionVersion),
+
+      observedAt:
         nowTs()
     });
 
-  payload.scriptVersion =
-    scriptVersion;
 
-  inject(payload);
-
-  return relayState.getRelayHealth();
+  return relayState
+    .getRelayHealth();
 }
 
 
 /**
- * Simulate a valid StreamKit heartbeat.
+ * Simulate one valid extension heartbeat.
  */
 export function simulateRelayHeartbeat({
-  scriptVersion =
-    DEBUG_SCRIPT_VERSION,
+  extensionVersion =
+    DEBUG_EXTENSION_VERSION,
 
-  timestamp =
-    nowTs()
+  channelId =
+    getDebugChannelId()
 } = {}) {
-  const payload =
-    makeRelayHeartbeat({
-      nonce:
-        getNonce(),
-
-      source:
-        MESSAGE_SOURCES.STREAMKIT,
-
-      timestamp
-    });
-
-  payload.scriptVersion =
-    scriptVersion;
-
-  inject(payload);
-
-  return relayState.getRelayHealth();
-}
-
-
-/**
- * Simulate relay disconnection.
- *
- * A disconnect is a browser/popup lifecycle condition rather than an
- * incoming StreamKit protocol message, so this intentionally updates
- * RelayStateStore directly.
- */
-export function simulateRelayDisconnect() {
   requireLocalRelayHost();
 
-  relayState.markDisconnected();
 
-  return relayState.getRelayHealth();
+  relayController
+    .receiveExtensionRelayHealth({
+      state:
+        "heartbeat",
+
+      channelId:
+        String(channelId),
+
+      extensionVersion:
+        String(extensionVersion),
+
+      observedAt:
+        nowTs()
+    });
+
+
+  return relayState
+    .getRelayHealth();
 }
 
 
 /**
- * Simulate an external relay error message.
+ * Simulate extension/StreamKit disconnection.
  */
-export function simulateRelayError(
-  message =
-    "Simulated relay error."
-) {
-  const payload = {
-    type:
-      MESSAGE_TYPES.RELAY_ERROR,
+export function simulateRelayDisconnect({
+  extensionVersion =
+    DEBUG_EXTENSION_VERSION,
 
-    version:
-      PROTOCOL_VERSION,
+  channelId =
+    getDebugChannelId()
+} = {}) {
+  requireLocalRelayHost();
 
-    nonce:
-      getNonce(),
 
-    timestamp:
-      nowTs(),
+  relayController
+    .receiveExtensionRelayHealth({
+      state:
+        "disconnected",
 
-    source:
-      MESSAGE_SOURCES.STREAMKIT,
+      channelId:
+        String(channelId),
 
-    message:
-      String(message)
-  };
+      extensionVersion:
+        String(extensionVersion),
 
-  inject(payload);
+      observedAt:
+        nowTs()
+    });
 
-  return relayState.getRelayHealth();
+
+  return relayState
+    .getRelayHealth();
 }
 
 // #endregion
 
 
-// #region Discord Speaking Simulation
+// #region Speaking Simulation
 
 /**
- * Simulate a Discord speaking event.
- *
- * reference may be:
- *
- * - Discord User ID
- * - configured Foundry User ID
- * - configured Foundry User name
- * - Foundry User document
+ * Simulate the same small speaking envelope
+ * delivered by the Chromium extension.
  */
 export function simulateRelaySpeaking(
   reference,
   speaking = true,
   {
-    username,
-    nick,
-    muted,
-    deafened,
-    channelId = "debug-channel",
-    guildId = "debug-guild",
-    timestamp = nowTs()
+    channelId =
+      getDebugChannelId(),
+
+    timestamp =
+      nowTs()
   } = {}
 ) {
+  requireLocalRelayHost();
+
+
   const discordUserId =
     resolveDiscordUserId(
       reference
     );
 
-  const current =
-    getCurrentDiscordState(
-      discordUserId
+
+  const normalizedSpeaking =
+    Boolean(
+      speaking
     );
 
-  const payload =
-    makeDiscordSpeaking({
-      nonce:
-        getNonce(),
+
+  relayController
+    .receiveExtensionSpeakingEvent({
+      eventName:
+        normalizedSpeaking
+          ? "SPEAKING_START"
+          : "SPEAKING_STOP",
 
       discordUserId,
 
-      username:
-        username
-        ?? current.username
-        ?? `Debug-${discordUserId}`,
-
-      nick:
-        nick
-        ?? current.nick,
+      channelId:
+        String(channelId),
 
       speaking:
-        Boolean(speaking),
+        normalizedSpeaking,
 
-      muted:
-        muted
-        ?? current.muted
-        ?? false,
-
-      deafened:
-        deafened
-        ?? current.deafened
-        ?? false,
-
-      channelId:
-        channelId
-        ?? current.channelId,
-
-      guildId:
-        guildId
-        ?? current.guildId,
-
-      timestamp,
-
-      source:
-        MESSAGE_SOURCES.STREAMKIT
+      observedAt:
+        Number(timestamp)
     });
 
-  inject(payload);
 
-  return relayState.getSpeakingState(
-    discordUserId
-  );
+  return relayState
+    .getSpeakingState(
+      discordUserId
+    );
 }
 
 
 /**
- * Toggle the authoritative speaking state for one Discord mapping.
+ * Toggle one configured Discord user's
+ * speaking state.
  */
 export function toggleRelaySpeaking(
   reference
@@ -435,10 +423,12 @@ export function toggleRelaySpeaking(
       reference
     );
 
+
   const current =
     getCurrentDiscordState(
       discordUserId
     );
+
 
   return simulateRelaySpeaking(
     discordUserId,
@@ -448,18 +438,21 @@ export function toggleRelaySpeaking(
 
 
 /**
- * Simulate several simultaneous Discord speakers.
+ * Simulate several simultaneous speakers.
  */
 export function simulateRelaySimultaneousSpeakers(
   references = []
 ) {
   if (
-    !Array.isArray(references)
+    !Array.isArray(
+      references
+    )
   ) {
     throw new TypeError(
       `${LOG_PREFIX} simulateRelaySimultaneousSpeakers requires an array.`
     );
   }
+
 
   return references.map(
     (reference) =>
@@ -473,105 +466,88 @@ export function simulateRelaySimultaneousSpeakers(
 // #endregion
 
 
-// #region Mute and Deafen Simulation
+// #region Discord User Discovery Simulation
 
 /**
- * Set one Discord user's muted state while preserving speaking/deafen state.
+ * Simulate Discord voice-state discovery.
+ *
+ * This exercises the same Foundry ingress used
+ * by the extension's VOICE_STATE_* events.
  */
-export function simulateRelayMuted(
+export function simulateDiscordUserPresence(
   reference,
-  muted = true
+  present = true,
+  {
+    username,
+    nick,
+
+    guildId =
+      DEBUG_GUILD_ID,
+
+    channelId =
+      getDebugChannelId()
+  } = {}
 ) {
+  requireLocalRelayHost();
+
+
+  const foundryUser =
+    resolveFoundryUser(
+      reference
+    );
+
+
   const discordUserId =
     resolveDiscordUserId(
       reference
     );
 
-  const current =
-    getCurrentDiscordState(
-      discordUserId
+
+  const normalizedPresent =
+    Boolean(
+      present
     );
 
-  return simulateRelaySpeaking(
-    discordUserId,
-    current.speaking,
-    {
+
+  return relayController
+    .receiveExtensionDiscordUserEvent({
+      eventName:
+        normalizedPresent
+          ? "VOICE_STATE_UPDATE"
+          : "VOICE_STATE_DELETE",
+
+      discordUserId,
+
       username:
-        current.username,
+        username
+        ?? foundryUser?.name
+        ?? `Debug-${discordUserId}`,
 
       nick:
-        current.nick,
-
-      muted:
-        Boolean(muted),
-
-      deafened:
-        current.deafened,
-
-      channelId:
-        current.channelId,
+        nick
+        ?? "",
 
       guildId:
-        current.guildId
-    }
-  );
+        String(guildId),
+
+      channelId:
+        String(channelId),
+
+      present:
+        normalizedPresent,
+
+      observedAt:
+        nowTs()
+    });
 }
 
 
 /**
- * Set one Discord user's deafened state while preserving speaking/mute state.
- */
-export function simulateRelayDeafened(
-  reference,
-  deafened = true
-) {
-  const discordUserId =
-    resolveDiscordUserId(
-      reference
-    );
-
-  const current =
-    getCurrentDiscordState(
-      discordUserId
-    );
-
-  return simulateRelaySpeaking(
-    discordUserId,
-    current.speaking,
-    {
-      username:
-        current.username,
-
-      nick:
-        current.nick,
-
-      muted:
-        current.muted,
-
-      deafened:
-        Boolean(deafened),
-
-      channelId:
-        current.channelId,
-
-      guildId:
-        current.guildId
-    }
-  );
-}
-
-// #endregion
-
-
-// #region Unmapped User Simulation
-
-/**
- * Send a valid speaking event for a Discord User ID which is not expected
- * to map to any configured Foundry User.
+ * Simulate a friendly but unmapped Discord user.
  */
 export function simulateUnmappedDiscordUser(
   discordUserId =
-    "999999999999999999",
+    DEBUG_UNMAPPED_USER_ID,
   {
     username =
       "UnmappedDebugUser",
@@ -580,149 +556,166 @@ export function simulateUnmappedDiscordUser(
       "Unmapped Debug"
   } = {}
 ) {
-  return simulateRelaySpeaking(
-    String(discordUserId),
-    true,
-    {
+  requireLocalRelayHost();
+
+
+  const normalizedId =
+    String(
+      discordUserId
+    );
+
+
+  relayController
+    .receiveExtensionDiscordUserEvent({
+      eventName:
+        "VOICE_STATE_UPDATE",
+
+      discordUserId:
+        normalizedId,
+
       username,
-      nick
-    }
+      nick,
+
+      guildId:
+        DEBUG_GUILD_ID,
+
+      channelId:
+        getDebugChannelId(),
+
+      present:
+        true,
+
+      observedAt:
+        nowTs()
+    });
+
+
+  return simulateRelaySpeaking(
+    normalizedId,
+    true
   );
 }
 
 // #endregion
 
 
-// #region Validation Failure Simulation
+// #region Extension Validation Simulation
 
 /**
- * Send an otherwise-valid speaking event with an invalid nonce.
+ * Send a malformed extension speaking envelope.
  */
-export function simulateInvalidNonce(
+export function simulateInvalidSpeakingEvent(
   reference
 ) {
+  requireLocalRelayHost();
+
+
   const discordUserId =
     resolveDiscordUserId(
       reference
     );
 
-  const payload =
-    makeDiscordSpeaking({
-      nonce:
-        "invalid-debug-nonce",
+
+  relayController
+    .receiveExtensionSpeakingEvent({
+      eventName:
+        "SPEAKING_STOP",
+
+      discordUserId,
+
+      channelId:
+        getDebugChannelId(),
+
+      /*
+       * Deliberately inconsistent with
+       * SPEAKING_STOP.
+       */
+      speaking:
+        true,
+
+      observedAt:
+        nowTs()
+    });
+
+
+  return getLastRejectedMessage();
+}
+
+
+/**
+ * Send an invalid Discord-user discovery envelope.
+ */
+export function simulateInvalidDiscordUserEvent(
+  reference
+) {
+  requireLocalRelayHost();
+
+
+  const discordUserId =
+    resolveDiscordUserId(
+      reference
+    );
+
+
+  relayController
+    .receiveExtensionDiscordUserEvent({
+      eventName:
+        "VOICE_STATE_UPDATE",
 
       discordUserId,
 
       username:
-        "InvalidNonceDebug",
+        "Invalid Debug User",
 
-      speaking:
-        true,
+      nick:
+        "",
 
-      timestamp:
-        nowTs(),
+      guildId:
+        DEBUG_GUILD_ID,
 
-      source:
-        MESSAGE_SOURCES.STREAMKIT
+      channelId:
+        getDebugChannelId(),
+
+      /*
+       * Deliberately inconsistent with
+       * VOICE_STATE_UPDATE.
+       */
+      present:
+        false,
+
+      observedAt:
+        nowTs()
     });
 
-  relayController
-    .injectDebugWindowMessage(
-      payload
-    );
 
-  return relayController.getStatus()
-    .lastRejectedMessage;
+  return getLastRejectedMessage();
 }
 
 
 /**
- * Send an otherwise-valid heartbeat from an unauthorized browser origin.
+ * Send an invalid extension health envelope.
  */
-export function simulateInvalidOrigin() {
-  const payload =
-    makeRelayHeartbeat({
-      nonce:
-        getNonce(),
+export function simulateInvalidRelayHealth() {
+  requireLocalRelayHost();
 
-      source:
-        MESSAGE_SOURCES.STREAMKIT,
 
-      timestamp:
+  relayController
+    .receiveExtensionRelayHealth({
+      state:
+        "invalid-debug-state",
+
+      channelId:
+        getDebugChannelId(),
+
+      extensionVersion:
+        DEBUG_EXTENSION_VERSION,
+
+      observedAt:
         nowTs()
     });
 
-  relayController
-    .injectDebugWindowMessage(
-      payload,
-      {
-        origin:
-          "https://invalid.example"
-      }
-    );
 
-  return relayController.getStatus()
-    .lastRejectedMessage;
-}
-
-
-/**
- * Simulate a message from the wrong browser Window object.
- *
- * This is particularly useful when an actual relay popup is open.
- */
-export function simulateInvalidWindowSource() {
-  const payload =
-    makeRelayHeartbeat({
-      nonce:
-        getNonce(),
-
-      source:
-        MESSAGE_SOURCES.STREAMKIT,
-
-      timestamp:
-        nowTs()
-    });
-
-  relayController
-    .injectDebugWindowMessage(
-      payload,
-      {
-        invalidSource: true
-      }
-    );
-
-  return relayController.getStatus()
-    .lastRejectedMessage;
-}
-
-
-/**
- * Simulate an incompatible protocol message.
- */
-export function simulateInvalidProtocolVersion() {
-  const payload =
-    makeRelayHeartbeat({
-      nonce:
-        getNonce(),
-
-      source:
-        MESSAGE_SOURCES.STREAMKIT,
-
-      timestamp:
-        nowTs()
-    });
-
-  payload.version =
-    PROTOCOL_VERSION + 1;
-
-  relayController
-    .injectDebugWindowMessage(
-      payload
-    );
-
-  return relayController.getStatus()
-    .lastRejectedMessage;
+  return getLastRejectedMessage();
 }
 
 // #endregion
@@ -731,24 +724,28 @@ export function simulateInvalidProtocolVersion() {
 // #region Stale State Simulation
 
 /**
- * Simulate a currently-speaking Discord user whose last authoritative
- * update is old enough to trigger stale-speaker cleanup.
- *
- * Uses the real controller -> relay state path, then explicitly runs one
- * watchdog pass so the test is deterministic.
+ * Simulate a speaking record old enough for
+ * stale-speaker cleanup.
  */
 export function simulateStaleSpeaker(
   reference
 ) {
+  requireLocalRelayHost();
+
+
   const timeout =
     Number(
       getSetting(
-        SETTING_KEYS.STALE_SPEAKER_TIMEOUT_MS
+        SETTING_KEYS
+          .STALE_SPEAKER_TIMEOUT_MS
       )
     );
 
+
   if (
-    !Number.isFinite(timeout)
+    !Number.isFinite(
+      timeout
+    )
     || timeout <= 0
   ) {
     throw new Error(
@@ -756,81 +753,94 @@ export function simulateStaleSpeaker(
     );
   }
 
+
   /*
-   * RelayController rejects messages older than 60 seconds. The normal
-   * default stale-speaker timeout is well below that.
+   * Extension ingress rejects events older than
+   * sixty seconds, so the deterministic test must
+   * remain inside that transport freshness window.
    */
-  if (timeout >= 59000) {
+  if (
+    timeout >= 59000
+  ) {
     throw new Error(
       `${LOG_PREFIX} For this deterministic debug test, set Stale Speaker Timeout below 59000 ms.`
     );
   }
 
-  const state =
-    simulateRelaySpeaking(
-      reference,
-      true,
-      {
-        timestamp:
-          nowTs()
-          - timeout
-          - 100
-      }
+
+  const discordUserId =
+    resolveDiscordUserId(
+      reference
     );
 
-  relayState.runWatchdogNow();
+
+  simulateRelaySpeaking(
+    discordUserId,
+    true,
+    {
+      timestamp:
+        nowTs()
+        - timeout
+        - 100
+    }
+  );
+
+
+  const beforeWatchdog =
+    relayState.getSpeakingState(
+      discordUserId
+    );
+
+
+  relayState
+    .runWatchdogNow();
+
 
   return {
-    beforeWatchdog:
-      state,
+    beforeWatchdog,
 
     afterWatchdog:
       relayState.getSpeakingState(
-        resolveDiscordUserId(
-          reference
-        )
+        discordUserId
       )
   };
 }
 
 
 /**
- * Simulate a relay heartbeat old enough for the relay-health watchdog to
- * mark the connection stale.
+ * Deterministically exercise relay-health stale
+ * detection without relying on browser timers.
+ *
+ * This is intentionally a RelayState unit-style
+ * test because the real extension ingress rejects
+ * timestamps older than its freshness window.
  */
 export function simulateStaleRelay() {
-  const timeout =
-    Number(
-      getSetting(
-        SETTING_KEYS.RELAY_HEARTBEAT_TIMEOUT_MS
-      )
-    );
+  requireLocalRelayHost();
 
-  if (
-    !Number.isFinite(timeout)
-    || timeout <= 0
-  ) {
-    throw new Error(
-      `${LOG_PREFIX} Relay Heartbeat Timeout is invalid.`
-    );
-  }
 
-  if (timeout >= 59000) {
-    throw new Error(
-      `${LOG_PREFIX} For this deterministic debug test, set Relay Heartbeat Timeout below 59000 ms.`
-    );
-  }
+  relayState.recordHeartbeat({
+    protocolVersion:
+      PROTOCOL_VERSION,
 
-  simulateRelayHeartbeat({
+    scriptVersion:
+      "Chromium Extension debug",
+
     timestamp:
       nowTs()
-      - timeout
-      - 100
+      - 2000,
+
+    heartbeatTimeoutMs:
+      1000
   });
 
-  relayState.runWatchdogNow();
 
-  return relayState.getRelayHealth();
+  relayState
+    .runWatchdogNow();
+
+
+  return relayState
+    .getRelayHealth();
 }
 
 // #endregion
@@ -838,32 +848,35 @@ export function simulateStaleRelay() {
 
 // #region Reset Utilities
 
-/**
- * Reset authoritative speaking state through the relay/socket layer.
- */
 export function resetRelaySpeaking() {
   requireLocalRelayHost();
 
-  const changed =
-    relayState.resetSpeakingStates(
-      "debug-reset"
-    );
 
-  socketService.broadcastResetSpeaking();
+  const changed =
+    relayState
+      .resetSpeakingStates(
+        "debug-reset"
+      );
+
+
+  socketService
+    .broadcastResetSpeaking();
+
 
   return changed;
 }
 
 
-/**
- * Clear authoritative relay speaking records completely.
- */
 export function clearRelaySpeakingStates() {
   requireLocalRelayHost();
 
-  relayState.clearSpeakingStates();
 
-  return relayState.getSpeakingStates();
+  relayState
+    .clearSpeakingStates();
+
+
+  return relayState
+    .getSpeakingStates();
 }
 
 // #endregion
@@ -871,9 +884,6 @@ export function clearRelaySpeakingStates() {
 
 // #region Diagnostics
 
-/**
- * Return a combined integration-test snapshot.
- */
 export function getRelayDebugState() {
   return {
     controller:
@@ -882,11 +892,17 @@ export function getRelayDebugState() {
     relayHealth:
       relayState.getRelayHealth(),
 
+    discoveredDiscordUsers:
+      relayController
+        .getDiscoveredDiscordUsers(),
+
     authoritativeSpeaking:
-      relayState.getSpeakingStates(),
+      relayState
+        .getSpeakingStates(),
 
     unmappedUsers:
-      relayState.getUnmappedUsers(),
+      relayState
+        .getUnmappedUsers(),
 
     socket:
       socketService.getStatus(),
@@ -906,21 +922,17 @@ export const relayDebugApi =
     simulateRelayReady,
     simulateRelayHeartbeat,
     simulateRelayDisconnect,
-    simulateRelayError,
 
     simulateRelaySpeaking,
     toggleRelaySpeaking,
     simulateRelaySimultaneousSpeakers,
 
-    simulateRelayMuted,
-    simulateRelayDeafened,
-
+    simulateDiscordUserPresence,
     simulateUnmappedDiscordUser,
 
-    simulateInvalidNonce,
-    simulateInvalidOrigin,
-    simulateInvalidWindowSource,
-    simulateInvalidProtocolVersion,
+    simulateInvalidSpeakingEvent,
+    simulateInvalidDiscordUserEvent,
+    simulateInvalidRelayHealth,
 
     simulateStaleSpeaker,
     simulateStaleRelay,

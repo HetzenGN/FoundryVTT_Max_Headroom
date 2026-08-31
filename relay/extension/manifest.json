@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "FoundryVTT Max Headroom Relay",
-  "version": "0.2.71",
-  "description": "Relays Discord StreamKit speaking events to Foundry VTT.",
+  "version": "0.2.72",
+  "description": "Relays Discord StreamKit voice activity, user discovery, and connection health to Foundry VTT.",
   "minimum_chrome_version": "111",
   "permissions": [
     "activeTab",

@@ -481,6 +481,8 @@ export function simulateDiscordUserPresence(
     username,
     nick,
 
+    muted = false,
+
     guildId =
       DEBUG_GUILD_ID,
 
@@ -536,11 +538,87 @@ export function simulateDiscordUserPresence(
       present:
         normalizedPresent,
 
+      /*
+       * A user who is no longer present in
+       * voice cannot remain muted.
+       */
+      muted:
+        normalizedPresent
+          ? Boolean(muted)
+          : false,
+
       observedAt:
         nowTs()
     });
 }
 
+/**
+ * Simulate one Discord user's mute/unmute
+ * through the real extension voice-state ingress.
+ */
+export function simulateRelayMuted(
+  reference,
+  muted = true
+) {
+  requireLocalRelayHost();
+
+
+  const foundryUser =
+    resolveFoundryUser(
+      reference
+    );
+
+
+  const discordUserId =
+    resolveDiscordUserId(
+      reference
+    );
+
+
+  const discovered =
+    relayController
+      .getDiscoveredDiscordUsers()
+      .find(
+        (entry) =>
+          entry.discordUserId
+          === discordUserId
+      );
+
+
+  return relayController
+    .receiveExtensionDiscordUserEvent({
+      eventName:
+        "VOICE_STATE_UPDATE",
+
+      discordUserId,
+
+      username:
+        discovered?.username
+        ?? foundryUser?.name
+        ?? `Debug-${discordUserId}`,
+
+      nick:
+        discovered?.nick
+        ?? "",
+
+      guildId:
+        discovered?.guildId
+        ?? DEBUG_GUILD_ID,
+
+      channelId:
+        discovered?.channelId
+        ?? getDebugChannelId(),
+
+      present:
+        true,
+
+      muted:
+        Boolean(muted),
+
+      observedAt:
+        nowTs()
+    });
+}
 
 /**
  * Simulate a friendly but unmapped Discord user.
@@ -584,6 +662,9 @@ export function simulateUnmappedDiscordUser(
 
       present:
         true,
+
+      muted:
+        alse,
 
       observedAt:
         nowTs()
@@ -681,6 +762,9 @@ export function simulateInvalidDiscordUserEvent(
        * VOICE_STATE_UPDATE.
        */
       present:
+        false,
+
+      muted:
         false,
 
       observedAt:
@@ -936,6 +1020,10 @@ export const relayDebugApi =
 
     simulateStaleSpeaker,
     simulateStaleRelay,
+
+    simulateDiscordUserPresence,
+    simulateRelayMuted,
+    simulateUnmappedDiscordUser,
 
     resetRelaySpeaking,
     clearRelaySpeakingStates,

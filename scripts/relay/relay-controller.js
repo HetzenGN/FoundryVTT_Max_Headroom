@@ -997,10 +997,19 @@ receiveExtensionDiscordUserEvent(
     validation.payload.observedAt
   );
 
+  const voiceEvent =
+    validation.payload;
+
+
   const entry =
     discordUserDirectory.record(
-      validation.payload
+      voiceEvent
     );
+
+
+  this._handleDiscordVoiceState(
+    voiceEvent
+  );
 
 
   return {
@@ -1013,8 +1022,82 @@ receiveExtensionDiscordUserEvent(
       entry.displayName,
 
     present:
-      entry.present
+      entry.present,
+
+    muted:
+      entry.muted
   };
+}
+
+/**
+ * Apply Discord voice-state metadata which affects
+ * reactive portrait presentation.
+ *
+ * Speaking remains authoritative from
+ * SPEAKING_START / SPEAKING_STOP.
+ *
+ * Muting immediately forces speaking=false.
+ */
+_handleDiscordVoiceState(
+  voiceEvent
+) {
+  const current =
+    relayState.getSpeakingState(
+      voiceEvent.discordUserId
+    );
+
+
+  const muted =
+    voiceEvent.present
+      ? Boolean(
+          voiceEvent.muted
+        )
+      : false;
+
+
+  const speaking =
+    voiceEvent.present
+    && !muted
+      ? Boolean(
+          current?.speaking
+        )
+      : false;
+
+
+  relayState.updateSpeakingState({
+    discordUserId:
+      voiceEvent.discordUserId,
+
+    username:
+      voiceEvent.username
+      || current?.username,
+
+    nick:
+      voiceEvent.nick
+      || current?.nick,
+
+    speaking,
+
+    muted,
+
+    /*
+     * Deafened state is intentionally not
+     * implemented as portrait behavior.
+     */
+    deafened:
+      false,
+
+    channelId:
+      voiceEvent.channelId
+      || current?.channelId,
+
+    guildId:
+      voiceEvent.guildId
+      || current?.guildId,
+
+    timestamp:
+      voiceEvent.observedAt
+  });
 }
 
 
@@ -1130,6 +1213,17 @@ _validateExtensionDiscordUserEvent(
     };
   }
 
+  if (
+  typeof payload.muted
+  !== "boolean"
+) {
+  return {
+    valid: false,
+    reason:
+      "Extension user payload has an invalid muted state."
+  };
+}
+
 
   const observedAt =
     Number(
@@ -1176,6 +1270,11 @@ _validateExtensionDiscordUserEvent(
 
       present:
         expectedPresent,
+
+      muted:
+        expectedPresent
+          ? payload.muted
+          : false,
 
       observedAt
     }
@@ -1409,9 +1508,29 @@ _validateExtensionSpeakingEvent(
      *
      * socket-service.js simply declines to create a portrait for them.
      */
-    relayState.updateSpeakingState(
-      normalized
-    );
+    const current =
+      relayState.getSpeakingState(
+        normalized.discordUserId
+      );
+
+
+    relayState.updateSpeakingState({
+      ...normalized,
+
+      /*
+      * Speaking events do not own mute state.
+      * Preserve the latest VOICE_STATE_* value.
+      */
+      muted:
+        current?.muted
+        ?? false,
+
+      /*
+      * Deafened behavior is intentionally unused.
+      */
+      deafened:
+        false
+    });
   }
 
   // #endregion

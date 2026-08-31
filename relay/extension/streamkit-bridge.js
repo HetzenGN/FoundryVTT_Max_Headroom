@@ -127,6 +127,9 @@
       && typeof payload.present
         === "boolean"
 
+      && typeof payload.muted
+        === "boolean"
+
       && Number.isFinite(
         payload.observedAt
       )

@@ -361,6 +361,66 @@ setSpeakingState(
   const isSpeaking =
     Boolean(speaking);
 
+  // #region Mute Transition
+
+const nextMuted =
+  muted === undefined
+    ? Boolean(
+        current.muted
+      )
+    : Boolean(muted);
+
+
+const muteChanged =
+  muted !== undefined
+  && nextMuted
+    !== Boolean(
+      current.muted
+    );
+
+
+if (muteChanged) {
+  /*
+   * Mute/unmute is a direct visual state change.
+   * It should not inherit speech-decay timing.
+   */
+  this._clearDecayTimer(
+    normalizedUserId
+  );
+
+
+  return this.updateState(
+    normalizedUserId,
+    {
+      discordUserId:
+        discordUserId
+        ?? current.discordUserId,
+
+      /*
+       * A muted user cannot remain visually
+       * speaking. On unmute, use the incoming
+       * authoritative speaking state.
+       */
+      speaking:
+        nextMuted
+          ? false
+          : isSpeaking,
+
+      muted:
+        nextMuted,
+
+      deafened:
+        deafened
+        ?? current.deafened,
+
+      updatedAt:
+        updatedAt
+        ?? nowTs()
+    }
+  );
+}
+
+// #endregion
   // #region Speaking Started
 
   if (isSpeaking) {

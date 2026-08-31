@@ -119,6 +119,9 @@ class DiscordUserDirectory {
         present:
           false,
 
+        muted:
+          false,
+
         firstSeen:
           Date.now(),
 
@@ -182,6 +185,15 @@ class DiscordUserDirectory {
         Boolean(
           observation.present
         ),
+
+      muted:
+        Boolean(
+          observation.present
+        )
+          ? Boolean(
+              observation.muted
+            )
+          : false,
 
       firstSeen:
         previous.firstSeen,

@@ -769,6 +769,110 @@
   text-align: center;
 }
 
+.max-headroom-user-config__discord-mapping {
+  display: flex;
+  flex-direction: column;
+
+  min-width: 0;
+
+  gap: 5px;
+}
+
+
+.max-headroom-user-config__discord-mapping > label {
+  min-width: 0;
+}
+
+
+.max-headroom-user-config__discord-mapping select {
+  width: 100%;
+  min-width: 0;
+}
+
+
+.max-headroom-user-config__discord-manual {
+  margin-top: 2px;
+
+  font-size: 0.85em;
+}
+
+
+.max-headroom-user-config__discord-manual summary {
+  width: max-content;
+
+  opacity: 0.7;
+
+  cursor: pointer;
+}
+
+
+.max-headroom-user-config__discord-manual[open] summary {
+  margin-bottom: 5px;
+}
+
+
+.max-headroom-user-config__discord-manual input {
+  width: 100%;
+}
+
+
+.max-headroom-user-config__discord-manual .notes {
+  margin:
+    4px
+    0
+    0;
+
+  opacity: 0.65;
+
+  font-size: 0.9em;
+}
+
+.max-headroom-user-config__intro-main {
+  display: flex;
+
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 16px;
+}
+
+
+.max-headroom-user-config__intro-main > div {
+  flex: 1 1 auto;
+}
+
+
+.max-headroom-user-config__discord-refresh {
+  flex: 0 0 auto;
+
+  width: auto;
+  margin: 0;
+
+  white-space: nowrap;
+}
+
+
+.max-headroom-user-config__discord-summary {
+  display: flex;
+
+  align-items: center;
+
+  gap: 6px;
+
+  margin-top: 8px;
+
+  opacity: 0.8;
+
+  font-size: 0.9em;
+}
+
+
+.max-headroom-user-config__discord-online {
+  color: #6fd47f;
+
+  font-size: 0.75em;
+}
+
 /* #endregion */
 
 

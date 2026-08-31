@@ -5,15 +5,58 @@
   {{!-- #region Introduction --}}
 
   <header class="max-headroom-user-config__intro">
-    <p>
-      Configure the Discord mapping and reactive portrait artwork
-      for each Foundry User.
-    </p>
 
-    <p class="notes">
-      These images are independent from Actor portraits, Tokens,
-      character assignments, and Foundry User avatars.
-    </p>
+    <div class="max-headroom-user-config__intro-main">
+
+      <div>
+        <p>
+          Configure the Discord mapping and reactive portrait artwork
+          for each Foundry User.
+        </p>
+
+        <p class="notes">
+          These images are independent from Actor portraits, Tokens,
+          character assignments, and Foundry User avatars.
+        </p>
+      </div>
+
+
+      <button
+        type="button"
+        class="max-headroom-user-config__discord-refresh"
+        data-action="refreshDiscordUsers"
+        title="Refresh the list of Discord users detected by the relay extension"
+      >
+        <i class="fa-solid fa-rotate"></i>
+        Refresh Discord List
+      </button>
+
+    </div>
+
+
+    <div class="max-headroom-user-config__discord-summary">
+
+      {{#if hasDetectedDiscordUsers}}
+
+        <i class="fa-solid fa-circle max-headroom-user-config__discord-online"></i>
+
+        <span>
+          Discord users currently detected:
+          <strong>{{detectedDiscordCount}}</strong>
+        </span>
+
+      {{else}}
+
+        <i class="fa-regular fa-circle"></i>
+
+        <span>
+          No Discord users currently detected.
+        </span>
+
+      {{/if}}
+
+    </div>
+
   </header>
 
   {{!-- #endregion --}}
@@ -51,17 +94,105 @@
           </label>
 
 
+        <div class="max-headroom-user-config__discord-mapping">
+
           <label>
-            <span>Discord User ID</span>
+            <span>Discord User</span>
+
+            <select
+              data-field="discordUserId"
+            >
+
+              <option
+                value=""
+                {{#if discordMapping.noneSelected}}selected{{/if}}
+              >
+                Not Assigned
+              </option>
+
+
+              {{#if discordMapping.hasPresentOptions}}
+
+                <optgroup label="Detected in Voice">
+
+                  {{#each discordMapping.presentOptions}}
+
+                    <option
+                      value="{{discordUserId}}"
+                      {{#if selected}}selected{{/if}}
+                    >
+                      {{displayName}}
+                    </option>
+
+                  {{/each}}
+
+                </optgroup>
+
+              {{/if}}
+
+
+              {{#if discordMapping.hasPreviousOptions}}
+
+                <optgroup label="Previously Detected">
+
+                  {{#each discordMapping.previousOptions}}
+
+                    <option
+                      value="{{discordUserId}}"
+                      {{#if selected}}selected{{/if}}
+                    >
+                      {{displayName}}
+                    </option>
+
+                  {{/each}}
+
+                </optgroup>
+
+              {{/if}}
+
+
+              {{#if discordMapping.missingCurrentOption}}
+
+                <optgroup label="Current Mapping">
+
+                  <option
+                    value="{{discordMapping.missingCurrentOption.discordUserId}}"
+                    selected
+                  >
+                    {{discordMapping.missingCurrentOption.displayName}}
+                  </option>
+
+                </optgroup>
+
+              {{/if}}
+
+            </select>
+
+          </label>
+
+
+          <details class="max-headroom-user-config__discord-manual">
+
+            <summary>
+              Manual Discord ID
+            </summary>
 
             <input
               type="text"
-              data-field="discordUserId"
-              value="{{config.discordUserId}}"
+              data-field="manualDiscordUserId"
+              value=""
               placeholder="123456789012345678"
               autocomplete="off"
             >
-          </label>
+
+            <p class="notes">
+              Advanced fallback. A manually entered ID overrides
+              the selected Discord user when saving.
+            </p>
+
+          </details>
+
+        </div>
 
 
           <label class="max-headroom-user-config__sort">

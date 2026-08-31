@@ -15,6 +15,10 @@ import {
   portraitBar
 } from "./portrait-bar.js";
 
+import {
+  discordUserDirectory
+} from "../relay/discord-user-directory.js";
+
 // #endregion
 
 
@@ -39,6 +43,148 @@ export const PORTRAIT_CONFIG_MENU_KEY =
 
 // #endregion
 
+// #region Discord Mapping Context
+
+function makeMappedIdLabel(
+  discordUserId
+) {
+  const normalized =
+    String(
+      discordUserId
+      ?? ""
+    ).trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  const suffix =
+    normalized.slice(-6);
+
+  return `Previously mapped Discord user …${suffix}`;
+}
+
+
+/**
+ * Build friendly Discord-user choices for one
+ * Foundry User configuration row.
+ *
+ * The actual select values remain Discord snowflake
+ * strings. Friendly names are presentation only.
+ */
+function buildDiscordMappingContext(
+  config,
+  discoveredUsers
+) {
+  const configuredDiscordUserId =
+    String(
+      config?.discordUserId
+      ?? ""
+    ).trim();
+
+
+  const presentOptions = [];
+  const previousOptions = [];
+
+  let configuredUserFound =
+    false;
+
+
+  for (
+    const discoveredUser
+    of discoveredUsers
+  ) {
+    const discordUserId =
+      String(
+        discoveredUser
+          ?.discordUserId
+        ?? ""
+      ).trim();
+
+    if (!discordUserId) {
+      continue;
+    }
+
+
+    const selected =
+      discordUserId
+      === configuredDiscordUserId;
+
+
+    if (selected) {
+      configuredUserFound =
+        true;
+    }
+
+
+    const option = {
+      discordUserId,
+
+      displayName:
+        String(
+          discoveredUser
+            ?.displayName
+          ?? makeMappedIdLabel(
+            discordUserId
+          )
+        ),
+
+      selected
+    };
+
+
+    if (
+      discoveredUser.present
+    ) {
+      presentOptions.push(
+        option
+      );
+    } else {
+      previousOptions.push(
+        option
+      );
+    }
+  }
+
+
+  const missingCurrentOption =
+    configuredDiscordUserId
+    && !configuredUserFound
+      ? {
+          discordUserId:
+            configuredDiscordUserId,
+
+          displayName:
+            makeMappedIdLabel(
+              configuredDiscordUserId
+            ),
+
+          selected:
+            true
+        }
+      : null;
+
+
+  return {
+    configuredDiscordUserId,
+
+    noneSelected:
+      !configuredDiscordUserId,
+
+    presentOptions,
+    previousOptions,
+
+    hasPresentOptions:
+      presentOptions.length > 0,
+
+    hasPreviousOptions:
+      previousOptions.length > 0,
+
+    missingCurrentOption
+  };
+}
+
+// #endregion
 
 // #region Reactive User Configuration Application
 
@@ -123,41 +269,84 @@ export class ReactiveUserConfigApp extends HandlebarsApplicationMixin(
 
   // #region Context Preparation
 
-  async _prepareContext(options) {
-    const context =
-      await super._prepareContext(options);
+async _prepareContext(options) {
+  const context =
+    await super._prepareContext(
+      options
+    );
 
-    const users =
-      getAllReactivePortraitConfigs()
-        .map(
-          ({ user, config }) => ({
-            userId: user.id,
-            name: String(
-              user.name ?? "Unnamed User"
+
+  const discoveredDiscordUsers =
+    discordUserDirectory.list();
+
+
+  const detectedDiscordCount =
+    discoveredDiscordUsers.filter(
+      (user) =>
+        user.present
+    ).length;
+
+
+  const knownDiscordCount =
+    discoveredDiscordUsers.length;
+
+
+  const users =
+    getAllReactivePortraitConfigs()
+      .map(
+        ({ user, config }) => ({
+          userId:
+            user.id,
+
+          name:
+            String(
+              user.name
+              ?? "Unnamed User"
             ),
 
-            config
-          })
-        )
-        .sort((a, b) => {
+          config,
+
+          discordMapping:
+            buildDiscordMappingContext(
+              config,
+              discoveredDiscordUsers
+            )
+        })
+      )
+      .sort(
+        (a, b) => {
           const orderDifference =
             a.config.sortOrder
             - b.config.sortOrder;
 
-          if (orderDifference !== 0) {
+          if (
+            orderDifference !== 0
+          ) {
             return orderDifference;
           }
 
           return a.name.localeCompare(
             b.name
           );
-        });
+        }
+      );
 
-    return {
-      ...context,
-      users
-    };
-  }
+
+  return {
+    ...context,
+
+    users,
+
+    detectedDiscordCount,
+    knownDiscordCount,
+
+    hasDetectedDiscordUsers:
+      detectedDiscordCount > 0,
+
+    hasKnownDiscordUsers:
+      knownDiscordCount > 0
+  };
+}
 
   // #endregion
 
@@ -171,18 +360,25 @@ export class ReactiveUserConfigApp extends HandlebarsApplicationMixin(
     event,
     target
   ) {
-    switch (target.dataset.action) {
-      case "browseImage":
-        return this._openImagePicker(
-          target
-        );
+      switch (target.dataset.action) {
+        case "browseImage":
+          return this._openImagePicker(
+            target
+          );
 
-      default:
-        return super._onClickAction(
-          event,
-          target
-        );
-    }
+
+        case "refreshDiscordUsers":
+          return this.render({
+            force: true
+          });
+
+
+        default:
+          return super._onClickAction(
+            event,
+            target
+          );
+      }
   }
 
   // #endregion
@@ -326,15 +522,26 @@ export class ReactiveUserConfigApp extends HandlebarsApplicationMixin(
           `[data-field="${field}"]`
         );
 
+    const selectedDiscordUserId =
+      read("discordUserId")
+        ?.value
+        ?.trim()
+      ?? "";
+
+
+    const manualDiscordUserId =
+      read("manualDiscordUserId")
+        ?.value
+        ?.trim()
+      ?? "";
+
     return {
       userId,
 
       config: {
         discordUserId:
-          read("discordUserId")
-            ?.value
-            ?.trim()
-          ?? "",
+          manualDiscordUserId
+          || selectedDiscordUserId,
 
         idleImage:
           read("idleImage")

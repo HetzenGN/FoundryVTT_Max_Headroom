@@ -11,11 +11,24 @@
   const PAGE_CHANNEL =
     "foundryvtt-max-headroom-extension";
 
-  const PAGE_MESSAGE_TYPE =
+  const PAGE_SPEAKING_TYPE =
     "streamkit-speaking-event";
 
-  const EXTENSION_MESSAGE_TYPE =
+  const PAGE_USER_TYPE =
+    "streamkit-user-event";
+
+  const EXTENSION_SPEAKING_TYPE =
     "MAX_HEADROOM_STREAMKIT_SPEAKING";
+
+  const EXTENSION_USER_TYPE =
+    "MAX_HEADROOM_STREAMKIT_USER";
+
+  const USER_EVENTS =
+    new Set([
+      "VOICE_STATE_CREATE",
+      "VOICE_STATE_UPDATE",
+      "VOICE_STATE_DELETE"
+    ]);
 
   const LOG_PREFIX =
     "[Max Headroom extension]";
@@ -37,52 +50,105 @@
 
   // #region Validation
 
-  function isValidPayload(
+  function isValidDiscordId(
+    value
+  ) {
+    return (
+      typeof value === "string"
+      && /^\d+$/.test(value)
+    );
+  }
+
+
+  function isValidSpeakingPayload(
     payload
   ) {
-    if (
-      !payload
-      || typeof payload
-        !== "object"
-    ) {
-      return false;
-    }
+    return Boolean(
+      payload
+      && typeof payload
+        === "object"
 
-    if (
-      payload.eventName
-        !== "SPEAKING_START"
-      && payload.eventName
-        !== "SPEAKING_STOP"
-    ) {
-      return false;
-    }
+      && (
+        payload.eventName
+          === "SPEAKING_START"
+        || payload.eventName
+          === "SPEAKING_STOP"
+      )
 
-    if (
-      typeof payload.discordUserId
-        !== "string"
-      || !/^\d+$/.test(
+      && isValidDiscordId(
         payload.discordUserId
       )
-    ) {
-      return false;
-    }
 
-    if (
-      typeof payload.speaking
-        !== "boolean"
-    ) {
-      return false;
-    }
+      && isValidDiscordId(
+        payload.channelId
+      )
 
-    if (
-      !Number.isFinite(
+      && typeof payload.speaking
+        === "boolean"
+
+      && Number.isFinite(
         payload.observedAt
       )
-    ) {
-      return false;
-    }
+    );
+  }
 
-    return true;
+
+  function isValidUserPayload(
+    payload
+  ) {
+    return Boolean(
+      payload
+      && typeof payload
+        === "object"
+
+      && USER_EVENTS.has(
+        payload.eventName
+      )
+
+      && isValidDiscordId(
+        payload.discordUserId
+      )
+
+      && isValidDiscordId(
+        payload.guildId
+      )
+
+      && isValidDiscordId(
+        payload.channelId
+      )
+
+      && typeof payload.present
+        === "boolean"
+
+      && Number.isFinite(
+        payload.observedAt
+      )
+    );
+  }
+
+  // #endregion
+
+
+  // #region Extension Transport
+
+  function sendToExtension(
+    type,
+    payload
+  ) {
+    chrome.runtime
+      .sendMessage({
+        type,
+        payload
+      })
+      .catch(
+        (error) => {
+          console.warn(
+            LOG_PREFIX,
+            "Unable to send StreamKit event to extension service worker.",
+            error
+          );
+        }
+      );
   }
 
   // #endregion
@@ -95,69 +161,69 @@
     (event) => {
       if (
         event.source
-        !== globalThis
+          !== globalThis
+
+        || event.origin
+          !== globalThis.location.origin
       ) {
         return;
       }
 
-      if (
-        event.origin
-        !== globalThis
-          .location.origin
-      ) {
-        return;
-      }
 
       const message =
         event.data;
+
 
       if (
         !message
         || typeof message
           !== "object"
-      ) {
-        return;
-      }
 
-      if (
-        message.channel
+        || message.channel
           !== PAGE_CHANNEL
-        || message.type
-          !== PAGE_MESSAGE_TYPE
       ) {
         return;
       }
+
 
       if (
-        !isValidPayload(
-          message.payload
-        )
+        message.type
+          === PAGE_SPEAKING_TYPE
       ) {
-        console.warn(
-          LOG_PREFIX,
-          "Rejected malformed StreamKit page event."
+        if (
+          !isValidSpeakingPayload(
+            message.payload
+          )
+        ) {
+          return;
+        }
+
+        sendToExtension(
+          EXTENSION_SPEAKING_TYPE,
+          message.payload
         );
 
         return;
       }
 
-      chrome.runtime
-        .sendMessage({
-          type:
-            EXTENSION_MESSAGE_TYPE,
 
-          payload:
+      if (
+        message.type
+          === PAGE_USER_TYPE
+      ) {
+        if (
+          !isValidUserPayload(
             message.payload
-        })
-        .catch(
-          (error) => {
-            console.warn(
-              LOG_PREFIX,
-              "Unable to send StreamKit event to extension service worker.",
-              error
-            );
-          }
+          )
+        ) {
+          return;
+        }
+
+        sendToExtension(
+          EXTENSION_USER_TYPE,
+          message.payload
         );
+      }
     }
   );
 

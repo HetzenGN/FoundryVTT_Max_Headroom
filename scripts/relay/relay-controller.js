@@ -32,6 +32,10 @@ import {
   socketService
 } from "./socket-service.js";
 
+import {
+  discordUserDirectory
+} from "./discord-user-directory.js";
+
 // #endregion
 
 
@@ -879,6 +883,233 @@ receiveExtensionSpeakingEvent(
   };
 }
 
+/**
+ * Receive Discord user metadata discovered by the
+ * Chromium companion extension.
+ */
+receiveExtensionDiscordUserEvent(
+  rawPayload
+) {
+  if (
+    !game.user?.isGM
+    || !this._isLocalHost
+  ) {
+    return {
+      ok: false,
+      error:
+        "not-relay-host"
+    };
+  }
+
+
+  const validation =
+    this._validateExtensionDiscordUserEvent(
+      rawPayload
+    );
+
+
+  if (!validation.valid) {
+    this._recordRejectedMessage(
+      `Extension user ingress: ${validation.reason}`,
+      rawPayload
+    );
+
+    return {
+      ok: false,
+
+      error:
+        "invalid-extension-user-payload",
+
+      reason:
+        validation.reason
+    };
+  }
+
+
+  const entry =
+    discordUserDirectory.record(
+      validation.payload
+    );
+
+
+  return {
+    ok: true,
+
+    discordUserId:
+      entry.discordUserId,
+
+    displayName:
+      entry.displayName,
+
+    present:
+      entry.present
+  };
+}
+
+
+/**
+ * Return users observed through the current
+ * extension/StreamKit session.
+ */
+getDiscoveredDiscordUsers() {
+  return discordUserDirectory.list();
+}
+
+
+/**
+ * Validate one extension Discord-user observation.
+ */
+_validateExtensionDiscordUserEvent(
+  payload
+) {
+  if (
+    !payload
+    || typeof payload !== "object"
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension user payload is not an object."
+    };
+  }
+
+
+  const acceptedEvents =
+    new Set([
+      "VOICE_STATE_CREATE",
+      "VOICE_STATE_UPDATE",
+      "VOICE_STATE_DELETE"
+    ]);
+
+
+  if (
+    !acceptedEvents.has(
+      payload.eventName
+    )
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension user payload has an invalid event name."
+    };
+  }
+
+
+  const discordUserId =
+    typeof payload.discordUserId
+      === "string"
+      ? payload.discordUserId.trim()
+      : "";
+
+
+  if (
+    !/^\d+$/.test(
+      discordUserId
+    )
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension user payload has an invalid Discord User ID."
+    };
+  }
+
+
+  const guildId =
+    typeof payload.guildId
+      === "string"
+      ? payload.guildId.trim()
+      : "";
+
+
+  const channelId =
+    typeof payload.channelId
+      === "string"
+      ? payload.channelId.trim()
+      : "";
+
+
+  if (
+    !/^\d+$/.test(guildId)
+    || !/^\d+$/.test(
+      channelId
+    )
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension user payload has invalid Discord guild/channel information."
+    };
+  }
+
+
+  const expectedPresent =
+    payload.eventName
+      !== "VOICE_STATE_DELETE";
+
+
+  if (
+    payload.present
+    !== expectedPresent
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension user presence does not match its voice-state event."
+    };
+  }
+
+
+  const observedAt =
+    Number(
+      payload.observedAt
+    );
+
+
+  if (
+    !isFreshTimestamp(
+      observedAt
+    )
+  ) {
+    return {
+      valid: false,
+      reason:
+        "Extension user event timestamp is stale or invalid."
+    };
+  }
+
+
+  return {
+    valid: true,
+
+    payload: {
+      eventName:
+        payload.eventName,
+
+      discordUserId,
+
+      username:
+        typeof payload.username
+          === "string"
+          ? payload.username.trim()
+          : "",
+
+      nick:
+        typeof payload.nick
+          === "string"
+          ? payload.nick.trim()
+          : "",
+
+      guildId,
+      channelId,
+
+      present:
+        expectedPresent,
+
+      observedAt
+    }
+  };
+}
 
 /**
  * Validate the small transport envelope supplied

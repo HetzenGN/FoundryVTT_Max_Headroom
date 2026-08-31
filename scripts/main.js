@@ -87,6 +87,20 @@ const moduleApi = {
       );
   },
 
+  receiveExtensionDiscordUserEvent(
+  payload
+) {
+  return relayController
+    .receiveExtensionDiscordUserEvent(
+      payload
+    );
+},
+
+
+getDiscoveredDiscordUsers() {
+  return relayController
+    .getDiscoveredDiscordUsers();
+},
 
   ...portraitDebugApi,
   ...relayDebugApi

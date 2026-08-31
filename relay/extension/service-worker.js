@@ -8,6 +8,9 @@ const MODULE_ID =
 const STREAMKIT_MESSAGE_TYPE =
   "MAX_HEADROOM_STREAMKIT_SPEAKING";
 
+const STREAMKIT_USER_MESSAGE_TYPE =
+  "MAX_HEADROOM_STREAMKIT_USER";
+
 const STORAGE_KEY =
   "pairedFoundryTab";
 
@@ -161,6 +164,56 @@ function isValidSpeakingPayload(
   return true;
 }
 
+function isValidDiscordUserPayload(
+  payload
+) {
+  const acceptedEvents =
+    new Set([
+      "VOICE_STATE_CREATE",
+      "VOICE_STATE_UPDATE",
+      "VOICE_STATE_DELETE"
+    ]);
+
+
+  return Boolean(
+    payload
+    && typeof payload
+      === "object"
+
+    && acceptedEvents.has(
+      payload.eventName
+    )
+
+    && typeof payload.discordUserId
+      === "string"
+
+    && /^\d+$/.test(
+      payload.discordUserId
+    )
+
+    && typeof payload.guildId
+      === "string"
+
+    && /^\d+$/.test(
+      payload.guildId
+    )
+
+    && typeof payload.channelId
+      === "string"
+
+    && /^\d+$/.test(
+      payload.channelId
+    )
+
+    && typeof payload.present
+      === "boolean"
+
+    && Number.isFinite(
+      payload.observedAt
+    )
+  );
+}
+
 // #endregion
 
 
@@ -207,6 +260,12 @@ async function inspectFoundryTab(
                 typeof module
                   ?.api
                   ?.receiveExtensionSpeakingEvent
+                  === "function",
+
+              userDirectoryIngressAvailable:
+                typeof module
+                  ?.api
+                  ?.receiveExtensionDiscordUserEvent
                   === "function",
 
               href:
@@ -272,13 +331,14 @@ async function pairFoundryTab(
   }
 
 
-  if (
-    !inspection
-    || !inspection.foundryAvailable
-    || !inspection.modulePresent
-    || !inspection.moduleActive
-    || !inspection.ingressAvailable
-  ) {
+if (
+  !inspection
+  || !inspection.foundryAvailable
+  || !inspection.modulePresent
+  || !inspection.moduleActive
+  || !inspection.ingressAvailable
+  || !inspection.userDirectoryIngressAvailable
+) {
     console.warn(
       LOG_PREFIX,
       "The active tab is not a ready FoundryVTT Max Headroom game.",
@@ -385,6 +445,7 @@ async function clearPairedFoundryTab() {
 
 async function deliverToFoundry(
   tabId,
+  methodName,
   payload
 ) {
   const results =
@@ -400,7 +461,8 @@ async function deliverToFoundry(
         func:
           (
             moduleId,
-            speakingPayload
+            requestedMethod,
+            deliveredPayload
           ) => {
             const module =
               globalThis.game
@@ -413,7 +475,7 @@ async function deliverToFoundry(
             const receive =
               module
                 ?.api
-                ?.receiveExtensionSpeakingEvent;
+                ?.[requestedMethod];
 
 
             if (
@@ -422,8 +484,12 @@ async function deliverToFoundry(
             ) {
               return {
                 ok: false,
+
                 error:
-                  "foundry-ingress-unavailable"
+                  "foundry-ingress-unavailable",
+
+                method:
+                  requestedMethod
               };
             }
 
@@ -431,7 +497,7 @@ async function deliverToFoundry(
             try {
               return (
                 receive(
-                  speakingPayload
+                  deliveredPayload
                 )
 
                 ?? {
@@ -456,6 +522,7 @@ async function deliverToFoundry(
 
         args: [
           MODULE_ID,
+          methodName,
           payload
         ]
       });
@@ -564,9 +631,9 @@ if (!senderChannelId) {
     const result =
       await deliverToFoundry(
         paired.tabId,
+        "receiveExtensionSpeakingEvent",
         message.payload
       );
-
 
     if (!result?.ok) {
       console.warn(
@@ -597,6 +664,97 @@ if (!senderChannelId) {
 
 // #endregion
 
+// #region Discord User Routing
+
+async function routeDiscordUserEvent(
+  message,
+  sender
+) {
+  const senderUrl =
+    sender?.url
+    ?? sender?.tab?.url
+    ?? "";
+
+
+  if (
+    !isStreamKitUrl(
+      senderUrl
+    )
+  ) {
+    return {
+      ok: false,
+      error:
+        "invalid-streamkit-sender"
+    };
+  }
+
+
+  const senderChannelId =
+    getStreamKitChannelId(
+      senderUrl
+    );
+
+
+  if (!senderChannelId) {
+    return {
+      ok: false,
+      error:
+        "streamkit-channel-unavailable"
+    };
+  }
+
+
+  if (
+    !isValidDiscordUserPayload(
+      message.payload
+    )
+  ) {
+    return {
+      ok: false,
+      error:
+        "invalid-discord-user-payload"
+    };
+  }
+
+
+  if (
+    message.payload.channelId
+    !== senderChannelId
+  ) {
+    return {
+      ok: false,
+      error:
+        "streamkit-channel-mismatch"
+    };
+  }
+
+
+  const paired =
+    await getPairedFoundryTab();
+
+
+  if (
+    !paired
+    || !Number.isInteger(
+      paired.tabId
+    )
+  ) {
+    return {
+      ok: false,
+      error:
+        "no-paired-foundry-tab"
+    };
+  }
+
+
+  return deliverToFoundry(
+    paired.tabId,
+    "receiveExtensionDiscordUserEvent",
+    message.payload
+  );
+}
+
+// #endregion
 
 // #region Runtime Messages
 
@@ -608,19 +766,44 @@ chrome.runtime
       sender,
       sendResponse
     ) => {
-      if (
-        !message
-        || message.type
-          !== STREAMKIT_MESSAGE_TYPE
-      ) {
+      if (!message) {
         return;
       }
 
 
-      routeSpeakingEvent(
-        message,
-        sender
-      )
+      let operation;
+
+
+      if (
+        message.type
+          === STREAMKIT_MESSAGE_TYPE
+      ) {
+        operation =
+          routeSpeakingEvent(
+            message,
+            sender
+          );
+      }
+
+
+      if (
+        message.type
+          === STREAMKIT_USER_MESSAGE_TYPE
+      ) {
+        operation =
+          routeDiscordUserEvent(
+            message,
+            sender
+          );
+      }
+
+
+      if (!operation) {
+        return;
+      }
+
+
+      operation
         .then(
           sendResponse
         )
@@ -635,7 +818,6 @@ chrome.runtime
 
             sendResponse({
               ok: false,
-
               error:
                 "unexpected-routing-failure"
             });

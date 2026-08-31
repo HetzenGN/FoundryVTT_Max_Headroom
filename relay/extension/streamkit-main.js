@@ -11,13 +11,23 @@
   const PAGE_CHANNEL =
     "foundryvtt-max-headroom-extension";
 
-  const PAGE_MESSAGE_TYPE =
+  const SPEAKING_MESSAGE_TYPE =
     "streamkit-speaking-event";
+
+  const USER_MESSAGE_TYPE =
+    "streamkit-user-event";
 
   const SPEAKING_EVENTS =
     new Set([
       "SPEAKING_START",
       "SPEAKING_STOP"
+    ]);
+
+  const USER_EVENTS =
+    new Set([
+      "VOICE_STATE_CREATE",
+      "VOICE_STATE_UPDATE",
+      "VOICE_STATE_DELETE"
     ]);
 
   const LOG_PREFIX =
@@ -40,12 +50,14 @@
 
   // #region Helpers
 
-  function normalizeDiscordId(
+  function normalizeId(
     value
   ) {
     if (
       typeof value !== "string"
-      || !value.trim()
+      || !/^\d+$/.test(
+        value.trim()
+      )
     ) {
       return "";
     }
@@ -54,6 +66,52 @@
   }
 
 
+  function normalizeOptionalText(
+    value
+  ) {
+    if (
+      value === undefined
+      || value === null
+    ) {
+      return null;
+    }
+
+    const text =
+      String(value).trim();
+
+    return text || null;
+  }
+
+
+  function getOverlayIds() {
+    const match =
+      globalThis.location.pathname
+        .match(
+          /^\/overlay\/voice\/([^/]+)\/([^/]+)/
+        );
+
+    return {
+      guildId:
+        normalizeId(
+          match?.[1]
+        ),
+
+      channelId:
+        normalizeId(
+          match?.[2]
+        )
+    };
+  }
+
+
+  const overlayIds =
+    getOverlayIds();
+
+  // #endregion
+
+
+  // #region Speaking Translation
+
   function makeSpeakingPayload(
     rpcMessage
   ) {
@@ -61,34 +119,28 @@
       !rpcMessage
       || typeof rpcMessage
         !== "object"
-    ) {
-      return null;
-    }
 
-    const eventName =
-      rpcMessage.evt;
-
-    if (
-      !SPEAKING_EVENTS.has(
-        eventName
+      || !SPEAKING_EVENTS.has(
+        rpcMessage.evt
       )
     ) {
       return null;
     }
+
 
     const data =
       rpcMessage.data;
 
     if (
       !data
-      || typeof data
-        !== "object"
+      || typeof data !== "object"
     ) {
       return null;
     }
 
+
     const discordUserId =
-      normalizeDiscordId(
+      normalizeId(
         data.user_id
       );
 
@@ -96,26 +148,142 @@
       return null;
     }
 
-    const channelId =
-      normalizeDiscordId(
-        data.channel_id
-      );
 
     return {
-      eventName,
+      eventName:
+        rpcMessage.evt,
 
       discordUserId,
 
       channelId:
-        channelId || null,
+        normalizeId(
+          data.channel_id
+        )
+        || overlayIds.channelId,
 
       speaking:
-        eventName
-        === "SPEAKING_START",
+        rpcMessage.evt
+          === "SPEAKING_START",
 
       observedAt:
         Date.now()
     };
+  }
+
+  // #endregion
+
+
+  // #region Discord User Translation
+
+  function makeUserPayload(
+    rpcMessage
+  ) {
+    if (
+      !rpcMessage
+      || typeof rpcMessage
+        !== "object"
+
+      || !USER_EVENTS.has(
+        rpcMessage.evt
+      )
+    ) {
+      return null;
+    }
+
+
+    const data =
+      rpcMessage.data;
+
+    if (
+      !data
+      || typeof data !== "object"
+    ) {
+      return null;
+    }
+
+
+    const discordUserId =
+      normalizeId(
+        data.user?.id
+      );
+
+    if (!discordUserId) {
+      return null;
+    }
+
+
+    const voiceState =
+      data.voice_state
+      && typeof data.voice_state
+        === "object"
+        ? data.voice_state
+        : {};
+
+
+    return {
+      eventName:
+        rpcMessage.evt,
+
+      discordUserId,
+
+      username:
+        normalizeOptionalText(
+          data.user?.username
+        ),
+
+      nick:
+        normalizeOptionalText(
+          data.nick
+        ),
+
+      guildId:
+        overlayIds.guildId,
+
+      channelId:
+        overlayIds.channelId,
+
+      muted:
+        Boolean(
+          voiceState.mute
+          || voiceState.self_mute
+          || voiceState.suppress
+        ),
+
+      deafened:
+        Boolean(
+          voiceState.deaf
+          || voiceState.self_deaf
+        ),
+
+      present:
+        rpcMessage.evt
+          !== "VOICE_STATE_DELETE",
+
+      observedAt:
+        Date.now()
+    };
+  }
+
+  // #endregion
+
+
+  // #region Page Transport
+
+  function postPageMessage(
+    type,
+    payload
+  ) {
+    globalThis.postMessage(
+      {
+        channel:
+          PAGE_CHANNEL,
+
+        type,
+
+        payload
+      },
+      globalThis.location.origin
+    );
   }
 
   // #endregion
@@ -136,46 +304,51 @@
           args
         );
 
+
       try {
         /*
-         * Current StreamKit logs the RPC object as
-         * the second console.log argument.
-         *
-         * This was confirmed against the live
+         * Confirmed against the current live
          * StreamKit Voice overlay.
          */
         const rpcMessage =
           args[1];
 
-        const payload =
+
+        const speakingPayload =
           makeSpeakingPayload(
             rpcMessage
           );
 
-        if (!payload) {
-          return result;
+
+        if (speakingPayload) {
+          postPageMessage(
+            SPEAKING_MESSAGE_TYPE,
+            speakingPayload
+          );
         }
 
-        window.postMessage(
-          {
-            channel:
-              PAGE_CHANNEL,
 
-            type:
-              PAGE_MESSAGE_TYPE,
+        const userPayload =
+          makeUserPayload(
+            rpcMessage
+          );
 
-            payload
-          },
-          globalThis.location.origin
-        );
+
+        if (userPayload) {
+          postPageMessage(
+            USER_MESSAGE_TYPE,
+            userPayload
+          );
+        }
 
       } catch (error) {
         console.warn(
           LOG_PREFIX,
-          "Unable to inspect StreamKit console event.",
+          "Unable to inspect StreamKit RPC event.",
           error
         );
       }
+
 
       return result;
     };
@@ -187,7 +360,14 @@
 
   console.info(
     LOG_PREFIX,
-    "StreamKit MAIN-world source installed."
+    "StreamKit MAIN-world source installed.",
+    {
+      guildId:
+        overlayIds.guildId,
+
+      channelId:
+        overlayIds.channelId
+    }
   );
 
   // #endregion

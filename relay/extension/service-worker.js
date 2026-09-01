@@ -32,6 +32,26 @@ const EXTENSION_VERSION =
     .getManifest()
     .version;
 
+const STREAMKIT_STATUS_KEY =
+  "streamKitStatus";
+
+
+const STREAMKIT_STATUS_STALE_MS =
+  90000;
+
+
+const UI_MESSAGE_TYPES =
+  Object.freeze({
+    GET_STATUS:
+      "MAX_HEADROOM_UI_GET_STATUS",
+
+    PAIR_ACTIVE_TAB:
+      "MAX_HEADROOM_UI_PAIR_ACTIVE_TAB",
+
+    CLEAR_PAIRING:
+      "MAX_HEADROOM_UI_CLEAR_PAIRING"
+  });
+
 // #endregion
 
 
@@ -318,6 +338,29 @@ async function inspectFoundryTab(
                   ?.receiveExtensionRelayHealth
                   === "function",
 
+              moduleVersion:
+                String(
+                  module?.version
+                  ?? module?.manifest?.version
+                  ?? ""
+                ),
+
+              worldTitle:
+                String(
+                  globalThis.game
+                    ?.world
+                    ?.title
+                  ?? ""
+                ),
+
+              userName:
+                String(
+                  globalThis.game
+                    ?.user
+                    ?.name
+                  ?? ""
+                ),
+
               href:
                 globalThis.location.href
             };
@@ -332,6 +375,20 @@ async function inspectFoundryTab(
   return (
     results?.[0]?.result
     ?? null
+  );
+}
+
+function isReadyFoundryInspection(
+  inspection
+) {
+  return Boolean(
+    inspection
+    && inspection.foundryAvailable
+    && inspection.modulePresent
+    && inspection.moduleActive
+    && inspection.ingressAvailable
+    && inspection.userDirectoryIngressAvailable
+    && inspection.relayHealthIngressAvailable
   );
 }
 
@@ -352,12 +409,12 @@ async function pairFoundryTab(
       tabId
     )
   ) {
-    console.warn(
-      LOG_PREFIX,
-      "The active tab has no usable tab ID."
-    );
+    return {
+      ok: false,
 
-    return false;
+      error:
+        "invalid-tab"
+    };
   }
 
 
@@ -377,26 +434,34 @@ async function pairFoundryTab(
       error
     );
 
-    return false;
+
+    return {
+      ok: false,
+
+      error:
+        "foundry-inspection-failed"
+    };
   }
 
 
-if (
-  !inspection
-  || !inspection.foundryAvailable
-  || !inspection.modulePresent
-  || !inspection.moduleActive
-  || !inspection.ingressAvailable
-  || !inspection.userDirectoryIngressAvailable
-  || !inspection.relayHealthIngressAvailable
-) {
+  if (
+    !isReadyFoundryInspection(
+      inspection
+    )
+  ) {
     console.warn(
       LOG_PREFIX,
       "The active tab is not a ready FoundryVTT Max Headroom game.",
       inspection
     );
 
-    return false;
+
+    return {
+      ok: false,
+
+      error:
+        "not-ready-foundry-tab"
+    };
   }
 
 
@@ -408,6 +473,15 @@ if (
         tab.url
         ?? inspection.href
       ),
+
+    worldTitle:
+      inspection.worldTitle,
+
+    userName:
+      inspection.userName,
+
+    moduleVersion:
+      inspection.moduleVersion,
 
     pairedAt:
       Date.now()
@@ -422,15 +496,6 @@ if (
     });
 
 
-  await chrome.action
-    .setBadgeText({
-      tabId,
-
-      text:
-        "F"
-    });
-
-
   console.info(
     LOG_PREFIX,
     "Paired Foundry tab.",
@@ -438,27 +503,13 @@ if (
   );
 
 
-  return true;
+  return {
+    ok: true,
+
+    paired:
+      pairedFoundryTab
+  };
 }
-
-
-chrome.action
-  .onClicked
-  .addListener(
-    (tab) => {
-      pairFoundryTab(
-        tab
-      ).catch(
-        (error) => {
-          console.error(
-            LOG_PREFIX,
-            "Unable to pair active tab.",
-            error
-          );
-        }
-      );
-    }
-  );
 
 // #endregion
 
@@ -491,6 +542,122 @@ async function clearPairedFoundryTab() {
 
 // #endregion
 
+// #region StreamKit UI State
+
+async function getStoredStreamKitStatus() {
+  const stored =
+    await chrome.storage
+      .session
+      .get(
+        STREAMKIT_STATUS_KEY
+      );
+
+
+  return (
+    stored[
+      STREAMKIT_STATUS_KEY
+    ]
+    ?? null
+  );
+}
+
+
+async function recordStreamKitStatus(
+  payload,
+  sender
+) {
+  const status = {
+    state:
+      payload.state,
+
+    channelId:
+      payload.channelId,
+
+    tabId:
+      Number.isInteger(
+        sender?.tab?.id
+      )
+        ? sender.tab.id
+        : null,
+
+    observedAt:
+      payload.observedAt,
+
+    lastSeen:
+      Date.now()
+  };
+
+
+  await chrome.storage
+    .session
+    .set({
+      [STREAMKIT_STATUS_KEY]:
+        status
+    });
+
+
+  return status;
+}
+
+
+function normalizeStreamKitStatus(
+  status
+) {
+  if (!status) {
+    return {
+      connected: false,
+
+      state:
+        "not-detected",
+
+      channelId:
+        "",
+
+      lastSeen:
+        null
+    };
+  }
+
+
+  const lastSeen =
+    Number(
+      status.lastSeen
+    );
+
+
+  const age =
+    Number.isFinite(
+      lastSeen
+    )
+      ? Date.now()
+        - lastSeen
+      : Infinity;
+
+
+  const connected =
+    status.state
+      !== "disconnected"
+
+    && age
+      <= STREAMKIT_STATUS_STALE_MS;
+
+
+  return {
+    ...status,
+
+    connected,
+
+    state:
+      connected
+        ? status.state
+        : status.state
+          === "disconnected"
+            ? "disconnected"
+            : "stale"
+  };
+}
+
+// #endregion
 
 // #region Foundry Delivery
 
@@ -871,6 +1038,10 @@ async function routeRelayHealth(
     };
   }
 
+  await recordStreamKitStatus(
+    message.payload,
+    sender
+  );
 
   const paired =
     await getPairedFoundryTab();
@@ -904,6 +1075,187 @@ async function routeRelayHealth(
 
 // #endregion
 
+// #region Extension UI
+
+async function getActiveBrowserTab() {
+  const tabs =
+    await chrome.tabs.query({
+      active: true,
+      currentWindow: true
+    });
+
+
+  return (
+    tabs?.[0]
+    ?? null
+  );
+}
+
+
+async function getPopupStatus() {
+  let paired =
+    await getPairedFoundryTab();
+
+
+  /*
+   * Validate that the paired Foundry tab
+   * still exists and still hosts Max Headroom.
+   */
+  if (
+    paired
+    && Number.isInteger(
+      paired.tabId
+    )
+  ) {
+    try {
+      const inspection =
+        await inspectFoundryTab(
+          paired.tabId
+        );
+
+
+      if (
+        isReadyFoundryInspection(
+          inspection
+        )
+      ) {
+        paired = {
+          ...paired,
+
+          valid:
+            true,
+
+          worldTitle:
+            inspection.worldTitle
+            || paired.worldTitle
+            || "",
+
+          userName:
+            inspection.userName
+            || paired.userName
+            || "",
+
+          moduleVersion:
+            inspection.moduleVersion
+            || paired.moduleVersion
+            || ""
+        };
+
+      } else {
+        await clearPairedFoundryTab();
+
+        paired =
+          null;
+      }
+
+    } catch {
+      await clearPairedFoundryTab();
+
+      paired =
+        null;
+    }
+  }
+
+
+  const activeTab =
+    await getActiveBrowserTab();
+
+
+  let activeFoundry =
+    null;
+
+
+  if (
+    Number.isInteger(
+      activeTab?.id
+    )
+  ) {
+    try {
+      const inspection =
+        await inspectFoundryTab(
+          activeTab.id
+        );
+
+
+      if (
+        isReadyFoundryInspection(
+          inspection
+        )
+      ) {
+        activeFoundry = {
+          tabId:
+            activeTab.id,
+
+          worldTitle:
+            inspection.worldTitle,
+
+          userName:
+            inspection.userName,
+
+          moduleVersion:
+            inspection.moduleVersion,
+
+          origin:
+            getOrigin(
+              activeTab.url
+              ?? inspection.href
+            )
+        };
+      }
+
+    } catch {
+      /*
+       * Restricted pages such as chrome://
+       * simply are not pairable.
+       */
+    }
+  }
+
+
+  const rawStreamKitStatus =
+    await getStoredStreamKitStatus();
+
+
+  return {
+    ok: true,
+
+    extensionVersion:
+      EXTENSION_VERSION,
+
+    paired,
+
+    activeFoundry,
+
+    streamKit:
+      normalizeStreamKitStatus(
+        rawStreamKitStatus
+      )
+  };
+}
+
+
+async function pairActiveFoundryTab() {
+  const activeTab =
+    await getActiveBrowserTab();
+
+
+  return pairFoundryTab(
+    activeTab
+  );
+}
+
+
+async function clearPairingFromUi() {
+  await clearPairedFoundryTab();
+
+
+  return {
+    ok: true
+  };
+}
+
+// #endregion
+
 // #region Runtime Messages
 
 chrome.runtime
@@ -921,6 +1273,31 @@ chrome.runtime
 
       let operation;
 
+      if (
+        message.type
+          === UI_MESSAGE_TYPES.GET_STATUS
+      ) {
+        operation =
+          getPopupStatus();
+      }
+
+
+      if (
+        message.type
+          === UI_MESSAGE_TYPES.PAIR_ACTIVE_TAB
+      ) {
+        operation =
+          pairActiveFoundryTab();
+      }
+
+
+      if (
+        message.type
+          === UI_MESSAGE_TYPES.CLEAR_PAIRING
+      ) {
+        operation =
+          clearPairingFromUi();
+      }
 
       if (
         message.type
@@ -1002,13 +1379,69 @@ chrome.tabs
 
       if (
         paired?.tabId
-        !== tabId
+        === tabId
+      ) {
+        await clearPairedFoundryTab();
+      }
+
+
+      const streamKitStatus =
+        await getStoredStreamKitStatus();
+
+
+      if (
+        streamKitStatus?.tabId
+        === tabId
+      ) {
+        await chrome.storage
+          .session
+          .set({
+            [STREAMKIT_STATUS_KEY]: {
+              ...streamKitStatus,
+
+              state:
+                "disconnected",
+
+              lastSeen:
+                Date.now()
+            }
+          });
+      }
+    }
+  );
+
+// #endregion
+
+// #region Installation
+
+chrome.runtime
+  .onInstalled
+  .addListener(
+    (details) => {
+      if (
+        details.reason
+        !== "install"
       ) {
         return;
       }
 
 
-      await clearPairedFoundryTab();
+      chrome.tabs
+        .create({
+          url:
+            chrome.runtime.getURL(
+              "welcome.html"
+            )
+        })
+        .catch(
+          (error) => {
+            console.warn(
+              LOG_PREFIX,
+              "Unable to open extension welcome page.",
+              error
+            );
+          }
+        );
     }
   );
 

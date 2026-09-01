@@ -1,0 +1,166 @@
+<!doctype html>
+
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>
+    Max Headroom Relay
+  </title>
+
+  <link
+    rel="stylesheet"
+    href="popup.css"
+  >
+</head>
+
+
+<body>
+
+  <main class="popup">
+
+    <header class="popup__header">
+
+      <div>
+        <h1>
+          Max Headroom Relay
+        </h1>
+
+        <p>
+          Discord voice companion for Foundry VTT
+        </p>
+      </div>
+
+      <div
+        id="extensionVersion"
+        class="version"
+      >
+        —
+      </div>
+
+    </header>
+
+
+    <section class="status-card">
+
+      <div class="status-heading">
+
+        <span
+          id="foundryIndicator"
+          class="status-dot"
+        ></span>
+
+        <h2>
+          Foundry
+        </h2>
+
+      </div>
+
+
+      <div
+        id="foundryStatus"
+        class="status-main"
+      >
+        Checking…
+      </div>
+
+
+      <div
+        id="foundryDetails"
+        class="status-details"
+      ></div>
+
+
+      <div class="actions">
+
+        <button
+          id="pairButton"
+          type="button"
+          disabled
+        >
+          Pair Current Foundry Tab
+        </button>
+
+
+        <button
+          id="clearPairButton"
+          type="button"
+          class="button-secondary"
+          hidden
+        >
+          Forget Pairing
+        </button>
+
+      </div>
+
+    </section>
+
+
+    <section class="status-card">
+
+      <div class="status-heading">
+
+        <span
+          id="streamKitIndicator"
+          class="status-dot"
+        ></span>
+
+        <h2>
+          Discord StreamKit
+        </h2>
+
+      </div>
+
+
+      <div
+        id="streamKitStatus"
+        class="status-main"
+      >
+        Checking…
+      </div>
+
+
+      <div
+        id="streamKitDetails"
+        class="status-details"
+      ></div>
+
+    </section>
+
+
+    <div
+      id="message"
+      class="message"
+      hidden
+    ></div>
+
+
+    <footer>
+
+      <a
+        href="https://github.com/HetzenGN/FoundryVTT_Max_Headroom"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Documentation
+      </a>
+
+    </footer>
+
+  </main>
+
+
+  <script
+    type="module"
+    src="popup.js"
+  ></script>
+
+</body>
+
+</html>

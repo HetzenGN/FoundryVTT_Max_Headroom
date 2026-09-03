@@ -13,6 +13,7 @@ import {
 } from "../settings.js";
 
 import {
+  PORTRAIT_DISPLAY_NAME_MODES,
   getReactivePortraitConfig,
   getConfiguredReactiveUsers
 } from "./portrait-flags.js";
@@ -105,6 +106,54 @@ function resolvePortraitImage(config, state) {
 }
 
 /**
+ * Resolve the name shown beneath a reactive portrait.
+ *
+ * Character mode resolves the Foundry User's current selected
+ * Player Character dynamically rather than storing an Actor name.
+ */
+function resolvePortraitDisplayName(
+  user,
+  config
+) {
+  const userName =
+    String(
+      user.name
+      ?? ""
+    ).trim();
+
+
+  if (
+    config.displayNameMode
+      === PORTRAIT_DISPLAY_NAME_MODES.CHARACTER
+  ) {
+    return (
+      String(
+        user.character?.name
+        ?? ""
+      ).trim()
+      || userName
+    );
+  }
+
+
+  if (
+    config.displayNameMode
+      === PORTRAIT_DISPLAY_NAME_MODES.CUSTOM
+  ) {
+    return (
+      String(
+        config.customDisplayName
+        ?? ""
+      ).trim()
+      || userName
+    );
+  }
+
+
+  return userName;
+}
+
+/**
  * Build the transient view model used by the portrait template and DOM
  * patching code.
  */
@@ -126,7 +175,11 @@ function buildPortraitViewModel(user) {
 
   return {
     userId: user.id,
-    name: String(user.name ?? ""),
+    name:
+      resolvePortraitDisplayName(
+        user,
+        config
+      ),
     discordUserId:
       config.discordUserId,
 

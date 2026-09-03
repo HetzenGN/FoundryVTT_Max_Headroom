@@ -19,6 +19,18 @@ import {
  */
 const FLAG_SCOPE = FLAG_KEYS.ROOT;
 
+export const PORTRAIT_DISPLAY_NAME_MODES =
+  Object.freeze({
+    USER:
+      "user",
+
+    CHARACTER:
+      "character",
+
+    CUSTOM:
+      "custom"
+  });
+
 /**
  * Default persistent reactive portrait configuration for a Foundry User.
  *
@@ -28,9 +40,16 @@ const FLAG_SCOPE = FLAG_KEYS.ROOT;
  */
 export const DEFAULT_REACTIVE_PORTRAIT_CONFIG = Object.freeze({
   discordUserId: "",
+
+  displayNameMode:
+    PORTRAIT_DISPLAY_NAME_MODES.USER,
+
+  customDisplayName: "",
+
   idleImage: "",
   talkingImage: "",
   mutedImage: "",
+
   enabled: false,
   sortOrder: 0
 });
@@ -70,6 +89,42 @@ function normalizeDiscordUserId(value) {
 }
 
 /**
+ * Normalize the configured portrait display-name mode.
+ */
+function normalizeDisplayNameMode(value) {
+  const normalized =
+    String(
+      value
+      ?? ""
+    )
+      .trim()
+      .toLowerCase();
+
+  if (
+    Object.values(
+      PORTRAIT_DISPLAY_NAME_MODES
+    ).includes(normalized)
+  ) {
+    return normalized;
+  }
+
+  return DEFAULT_REACTIVE_PORTRAIT_CONFIG
+    .displayNameMode;
+}
+
+
+/**
+ * Normalize a custom portrait display name.
+ */
+function normalizeCustomDisplayName(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim();
+}
+
+/**
  * Normalize an image path.
  */
 function normalizeImagePath(value) {
@@ -98,6 +153,16 @@ function normalizeConfig(config = {}) {
   return {
     discordUserId: normalizeDiscordUserId(
       config.discordUserId
+    ),
+
+    displayNameMode:
+    normalizeDisplayNameMode(
+      config.displayNameMode
+    ),
+
+  customDisplayName:
+    normalizeCustomDisplayName(
+      config.customDisplayName
     ),
 
     idleImage: normalizeImagePath(
@@ -154,6 +219,20 @@ export function getReactivePortraitConfig(user) {
         FLAG_KEYS.DISCORD_USER_ID
       )
       ?? DEFAULT_REACTIVE_PORTRAIT_CONFIG.discordUserId,
+
+    displayNameMode:
+      user.getFlag(
+        FLAG_SCOPE,
+        FLAG_KEYS.DISPLAY_NAME_MODE
+      )
+      ?? DEFAULT_REACTIVE_PORTRAIT_CONFIG.displayNameMode,
+
+    customDisplayName:
+      user.getFlag(
+        FLAG_SCOPE,
+        FLAG_KEYS.CUSTOM_DISPLAY_NAME
+      )
+      ?? DEFAULT_REACTIVE_PORTRAIT_CONFIG.customDisplayName,
 
     idleImage:
       user.getFlag(
@@ -287,6 +366,35 @@ export async function setReactivePortraitConfig(
   }
 
   if (
+    Object.hasOwn(
+      changes,
+      "displayNameMode"
+    )
+    && next.displayNameMode
+      !== current.displayNameMode
+  ) {
+    writes.push([
+      FLAG_KEYS.DISPLAY_NAME_MODE,
+      next.displayNameMode
+    ]);
+  }
+
+
+  if (
+    Object.hasOwn(
+      changes,
+      "customDisplayName"
+    )
+    && next.customDisplayName
+      !== current.customDisplayName
+  ) {
+    writes.push([
+      FLAG_KEYS.CUSTOM_DISPLAY_NAME,
+      next.customDisplayName
+    ]);
+  }
+
+  if (
     Object.hasOwn(changes, "idleImage")
     && next.idleImage !== current.idleImage
   ) {
@@ -383,7 +491,9 @@ export async function clearReactivePortraitConfig(user) {
     FLAG_KEYS.TALKING_IMAGE,
     FLAG_KEYS.MUTED_IMAGE,
     FLAG_KEYS.ENABLED,
-    FLAG_KEYS.SORT_ORDER
+    FLAG_KEYS.SORT_ORDER,
+    FLAG_KEYS.DISPLAY_NAME_MODE,
+    FLAG_KEYS.CUSTOM_DISPLAY_NAME
   ];
 
   for (const key of keys) {

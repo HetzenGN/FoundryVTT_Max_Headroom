@@ -304,6 +304,37 @@ async _prepareContext(options) {
               ?? "Unnamed User"
             ),
 
+          displayName: {
+            userName:
+              String(
+                user.name
+                ?? "Unnamed User"
+              ),
+
+            characterName:
+              String(
+                user.character?.name
+                ?? ""
+              ),
+
+            hasCharacter:
+              Boolean(
+                user.character
+              ),
+
+            userSelected:
+              config.displayNameMode
+                === "user",
+
+            characterSelected:
+              config.displayNameMode
+                === "character",
+
+            customSelected:
+              config.displayNameMode
+                === "custom"
+          },
+
           config,
 
           discordMapping:
@@ -366,6 +397,10 @@ async _prepareContext(options) {
             target
           );
 
+        case "clearImage":
+          return this._clearImage(
+            target
+          );
 
         case "refreshDiscordUsers":
           return this.render({
@@ -439,6 +474,55 @@ async _prepareContext(options) {
   }
 
   /**
+ * Clear one configured image path and update its preview.
+ *
+ * The change remains part of the form until Save Configuration
+ * is pressed, matching normal image selection behavior.
+ */
+  _clearImage(button) {
+    const userId =
+      button.dataset.userId;
+
+    const field =
+      button.dataset.field;
+
+    if (
+      !userId
+      || !field
+    ) {
+      return;
+    }
+
+
+    const row =
+      button.closest(
+        '[data-role="user-config-row"]'
+      );
+
+    const input =
+      row?.querySelector(
+        `[data-field="${CSS.escape(field)}"]`
+      );
+
+    if (!input) {
+      console.error(
+        `[${MODULE_ID}] Unable to locate image input for "${field}".`
+      );
+
+      return;
+    }
+
+
+    input.value = "";
+
+    this._updateImagePreview(
+      userId,
+      field,
+      ""
+    );
+  }
+
+  /**
    * Update one image preview without re-rendering the entire config window.
    */
   _updateImagePreview(
@@ -494,8 +578,20 @@ async _prepareContext(options) {
     const empty =
       document.createElement("span");
 
+    const emptyText = {
+      idleImage:
+        "No image selected",
+
+      talkingImage:
+        "Falls back to idle",
+
+      mutedImage:
+        "Optional"
+    };
+
     empty.textContent =
-      "No image selected";
+      emptyText[field]
+      ?? "No image selected";
 
     preview.append(empty);
 
@@ -542,6 +638,18 @@ async _prepareContext(options) {
         discordUserId:
           manualDiscordUserId
           || selectedDiscordUserId,
+
+        displayNameMode:
+          read("displayNameMode")
+            ?.value
+            ?.trim()
+          ?? "user",
+
+        customDisplayName:
+          read("customDisplayName")
+            ?.value
+            ?.trim()
+          ?? "",
 
         idleImage:
           read("idleImage")

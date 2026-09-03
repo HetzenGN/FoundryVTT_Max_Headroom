@@ -240,6 +240,42 @@ Hooks.on(
 );
 
 // #endregion
+
+// #region Foundry User Character Updates
+
+/*
+ * A User's selected Player Character is native Foundry User data.
+ *
+ * Refresh the Portrait Bar when that assignment changes so portrait
+ * names configured for "Player Character" update immediately.
+ */
+Hooks.on(
+  "updateUser",
+  (_user, changes) => {
+    if (
+      !Object.hasOwn(
+        changes,
+        "character"
+      )
+    ) {
+      return;
+    }
+
+
+    portraitBar
+      .refresh()
+      .catch(
+        (error) => {
+          console.error(
+            `${LOG_PREFIX} Failed to refresh Portrait Bar after a Player Character changed.`,
+            error
+          );
+        }
+      );
+  }
+);
+
+// #endregion
   
 // #region Request Initial State Sync
 

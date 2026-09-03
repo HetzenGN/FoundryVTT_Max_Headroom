@@ -64,6 +64,12 @@ export const FLAG_KEYS =
     MUTED_IMAGE:
       "mutedImage",
 
+    DISPLAY_NAME_MODE:
+      "displayNameMode",
+
+    CUSTOM_DISPLAY_NAME:
+      "customDisplayName",
+
     ENABLED:
       "enabled",
 

@@ -210,6 +210,60 @@
 
         {{!-- #endregion --}}
 
+        {{!-- #region Portrait Display Name --}}
+
+        <div class="max-headroom-user-config__display-name">
+
+          <label>
+            <span>Portrait Name</span>
+
+            <select
+              data-field="displayNameMode"
+            >
+              <option
+                value="user"
+                {{#if displayName.userSelected}}selected{{/if}}
+              >
+                Player — {{displayName.userName}}
+              </option>
+
+              <option
+                value="character"
+                {{#if displayName.characterSelected}}selected{{/if}}
+              >
+                Player Character —
+                {{#if displayName.hasCharacter}}
+                  {{displayName.characterName}}
+                {{else}}
+                  None Assigned
+                {{/if}}
+              </option>
+
+              <option
+                value="custom"
+                {{#if displayName.customSelected}}selected{{/if}}
+              >
+                Custom
+              </option>
+            </select>
+          </label>
+
+
+          <label>
+            <span>Custom Name</span>
+
+            <input
+              type="text"
+              data-field="customDisplayName"
+              value="{{config.customDisplayName}}"
+              placeholder="Used when Custom is selected"
+              autocomplete="off"
+            >
+          </label>
+
+        </div>
+
+        {{!-- #endregion --}}
 
         {{!-- #region Reactive Images --}}
 
@@ -243,6 +297,17 @@
                 title="Browse for idle image"
               >
                 <i class="fa-solid fa-folder-open"></i>
+              </button>
+
+              <button
+                type="button"
+                data-action="clearImage"
+                data-user-id="{{userId}}"
+                data-field="idleImage"
+                title="Clear idle image"
+                aria-label="Clear idle image"
+              >
+                <i class="fa-solid fa-xmark"></i>
               </button>
 
             </div>
@@ -295,6 +360,17 @@
                 <i class="fa-solid fa-folder-open"></i>
               </button>
 
+              <button
+                type="button"
+                data-action="clearImage"
+                data-user-id="{{userId}}"
+                data-field="talkingImage"
+                title="Clear talking image and fall back to idle"
+                aria-label="Clear talking image"
+              >
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+
             </div>
 
             <div
@@ -343,6 +419,17 @@
                 title="Browse for muted image"
               >
                 <i class="fa-solid fa-folder-open"></i>
+              </button>
+
+              <button
+                type="button"
+                data-action="clearImage"
+                data-user-id="{{userId}}"
+                data-field="mutedImage"
+                title="Clear muted image"
+                aria-label="Clear muted image"
+              >
+                <i class="fa-solid fa-xmark"></i>
               </button>
 
             </div>

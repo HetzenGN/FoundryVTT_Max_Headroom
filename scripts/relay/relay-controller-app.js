@@ -19,6 +19,19 @@ import {
   socketService
 } from "./socket-service.js";
 
+import {
+  COMPANION_EXTENSION_STORE_URL,
+  DOCUMENTATION_URL
+} from "../companion-links.js";
+
+import {
+  getAllReactivePortraitConfigs
+} from "../portraits/portrait-flags.js";
+
+import {
+  ReactiveUserConfigApp
+} from "../portraits/portrait-config-app.js";
+
 // #endregion
 
 
@@ -128,6 +141,60 @@ function getErrorMessage(error) {
 
 // #endregion
 
+// #region Onboarding Helpers
+
+function countPortraitMappings() {
+  const configs =
+    getAllReactivePortraitConfigs();
+
+
+  const enabled =
+    configs.filter(
+      ({ config }) =>
+        Boolean(
+          config.enabled
+        )
+    );
+
+
+  const mapped =
+    enabled.filter(
+      ({ config }) =>
+        Boolean(
+          String(
+            config.discordUserId
+            ?? ""
+          ).trim()
+        )
+    );
+
+
+  return {
+    enabledCount:
+      enabled.length,
+
+    mappedCount:
+      mapped.length,
+
+    complete:
+      enabled.length > 0
+      && mapped.length
+        === enabled.length
+  };
+}
+
+
+function openExternalUrl(
+  url
+) {
+  globalThis.open(
+    url,
+    "_blank",
+    "noopener,noreferrer"
+  );
+}
+
+// #endregion
 
 // #region Relay Controller Application
 
@@ -241,6 +308,43 @@ export class RelayControllerApp extends HandlebarsApplicationMixin(
 
     const health =
       relayState.getRelayHealth();
+
+    const discoveredDiscordUsers =
+      relayController
+        .getDiscoveredDiscordUsers();
+
+
+    const presentDiscordUsers =
+      discoveredDiscordUsers.filter(
+        (user) =>
+          user.present
+      );
+
+
+    const portraitMappings =
+      countPortraitMappings();
+
+
+    const companionDetected =
+      health.status
+      === "connected";
+
+
+    const relayHostReady =
+      Boolean(
+        controller.isLocalHost
+      );
+
+
+    const discordUsersReady =
+      presentDiscordUsers.length > 0;
+
+
+    const onboardingReady =
+      relayHostReady
+      && companionDetected
+      && discordUsersReady
+      && portraitMappings.complete;
 
     const socket =
       socketService.getStatus();
@@ -392,6 +496,33 @@ export class RelayControllerApp extends HandlebarsApplicationMixin(
 
       // #endregion
 
+      // #region Onboarding Context
+
+        companionDetected,
+
+        relayHostReady,
+
+        discordUsersReady,
+
+        onboardingReady,
+
+        detectedDiscordUserCount:
+          presentDiscordUsers.length,
+
+        knownDiscordUserCount:
+          discoveredDiscordUsers.length,
+
+        portraitMappedCount:
+          portraitMappings.mappedCount,
+
+        portraitEnabledCount:
+          portraitMappings.enabledCount,
+
+        portraitMappingsComplete:
+          portraitMappings.complete,
+
+        // #endregion
+
 
       // #region Relay Host Context
 
@@ -471,6 +602,8 @@ export class RelayControllerApp extends HandlebarsApplicationMixin(
         )
 
       // #endregion
+
+      
     };
   }
 
@@ -540,6 +673,34 @@ export class RelayControllerApp extends HandlebarsApplicationMixin(
 
       case "refresh":
         return this._actionRefresh();
+
+      case "getCompanionExtension":
+        openExternalUrl(
+          COMPANION_EXTENSION_STORE_URL
+        );
+
+        return;
+
+
+      case "openDocumentation":
+        openExternalUrl(
+          DOCUMENTATION_URL
+        );
+
+        return;
+
+
+      case "configurePortraits": {
+        const app =
+          new ReactiveUserConfigApp();
+
+
+        app.render({
+          force: true
+        });
+
+        return;
+      }
 
       default:
         return super._onClickAction(

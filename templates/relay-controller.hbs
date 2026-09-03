@@ -198,6 +198,271 @@
 
   {{!-- #endregion --}}
 
+  {{!-- #region Setup Guide --}}
+
+  <section class="max-headroom-relay-controller__section">
+
+    <div class="max-headroom-relay-controller__section-header">
+
+      <h2>
+        <i class="fa-solid fa-list-check"></i>
+        Setup
+      </h2>
+
+
+      {{#if onboardingReady}}
+
+        <span
+          class="
+            max-headroom-relay-controller__setup-state
+            is-ready
+          "
+        >
+          <i class="fa-solid fa-circle-check"></i>
+          Ready
+        </span>
+
+      {{else}}
+
+        <span
+          class="
+            max-headroom-relay-controller__setup-state
+            is-pending
+          "
+        >
+          <i class="fa-solid fa-circle-exclamation"></i>
+          Setup Required
+        </span>
+
+      {{/if}}
+
+    </div>
+
+
+    <div class="max-headroom-relay-controller__setup-list">
+
+
+      {{!-- Relay Host --}}
+
+      <div class="max-headroom-relay-controller__setup-row">
+
+        <div class="max-headroom-relay-controller__setup-icon">
+
+          {{#if relayHostReady}}
+
+            <i class="fa-solid fa-circle-check is-ready"></i>
+
+          {{else}}
+
+            <i class="fa-regular fa-circle is-pending"></i>
+
+          {{/if}}
+
+        </div>
+
+
+        <div class="max-headroom-relay-controller__setup-description">
+
+          <strong>
+            Relay Host
+          </strong>
+
+          {{#if relayHostReady}}
+
+            <span>
+              This GM is the active relay host.
+            </span>
+
+          {{else}}
+
+            <span>
+              Claim Relay Host to receive Discord activity.
+            </span>
+
+          {{/if}}
+
+        </div>
+
+      </div>
+
+
+      {{!-- Companion --}}
+
+      <div class="max-headroom-relay-controller__setup-row">
+
+        <div class="max-headroom-relay-controller__setup-icon">
+
+          {{#if companionDetected}}
+
+            <i class="fa-solid fa-circle-check is-ready"></i>
+
+          {{else}}
+
+            <i class="fa-regular fa-circle is-pending"></i>
+
+          {{/if}}
+
+        </div>
+
+
+        <div class="max-headroom-relay-controller__setup-description">
+
+          <strong>
+            Browser Companion
+          </strong>
+
+          {{#if companionDetected}}
+
+            <span>
+              Connected{{#if companionVersion}} - v{{companionVersion}}{{/if}}
+            </span>
+
+          {{else}}
+
+            <span>
+              Companion not detected. Install it or pair this Foundry tab.
+            </span>
+
+          {{/if}}
+
+        </div>
+
+
+        <button
+          type="button"
+          class="max-headroom-relay-controller__small-button"
+          data-action="getCompanionExtension"
+        >
+          <i class="fa-brands fa-chrome"></i>
+
+          {{#if companionDetected}}
+            View Extension
+          {{else}}
+            Get Companion
+          {{/if}}
+        </button>
+
+      </div>
+
+
+      {{!-- StreamKit / Discord Users --}}
+
+      <div class="max-headroom-relay-controller__setup-row">
+
+        <div class="max-headroom-relay-controller__setup-icon">
+
+          {{#if discordUsersReady}}
+
+            <i class="fa-solid fa-circle-check is-ready"></i>
+
+          {{else}}
+
+            <i class="fa-regular fa-circle is-pending"></i>
+
+          {{/if}}
+
+        </div>
+
+
+        <div class="max-headroom-relay-controller__setup-description">
+
+          <strong>
+            Discord StreamKit
+          </strong>
+
+          {{#if discordUsersReady}}
+
+            <span>
+              {{detectedDiscordUserCount}} Discord users detected in voice.
+            </span>
+
+          {{else}}
+
+            <span>
+              Open StreamKit and join the Discord voice channel.
+            </span>
+
+          {{/if}}
+
+        </div>
+
+
+        <button
+          type="button"
+          class="max-headroom-relay-controller__small-button"
+          data-action="openRelay"
+        >
+          <i class="fa-brands fa-discord"></i>
+          Open StreamKit
+        </button>
+
+      </div>
+
+
+      {{!-- Portrait Mapping --}}
+
+      <div class="max-headroom-relay-controller__setup-row">
+
+        <div class="max-headroom-relay-controller__setup-icon">
+
+          {{#if portraitMappingsComplete}}
+
+            <i class="fa-solid fa-circle-check is-ready"></i>
+
+          {{else}}
+
+            <i class="fa-regular fa-circle is-pending"></i>
+
+          {{/if}}
+
+        </div>
+
+
+        <div class="max-headroom-relay-controller__setup-description">
+
+          <strong>
+            Reactive Portraits
+          </strong>
+
+          <span>
+            {{portraitMappedCount}} of {{portraitEnabledCount}}
+            enabled users mapped.
+          </span>
+
+        </div>
+
+
+        <button
+          type="button"
+          class="max-headroom-relay-controller__small-button"
+          data-action="configurePortraits"
+        >
+          <i class="fa-solid fa-users-gear"></i>
+          Configure
+        </button>
+
+      </div>
+
+    </div>
+
+
+    <div class="max-headroom-relay-controller__setup-footer">
+
+      <button
+        type="button"
+        class="max-headroom-relay-controller__small-button"
+        data-action="openDocumentation"
+      >
+        <i class="fa-brands fa-github"></i>
+        Documentation
+      </button>
+
+    </div>
+
+  </section>
+
+  {{!-- #endregion --}}
+
 
   {{!-- #region Speaking Users --}}
 
